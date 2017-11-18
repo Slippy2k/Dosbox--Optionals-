@@ -67,7 +67,7 @@ Support shaders :)
 - SDL2 2.0.4/ - SDL2 Net
 
 - Sound :
-- <a href="https://sourceforge.net/p/dosbox/code-0/commit_browser" target="_blank" - rel="noopener">Mamesound Branch</a>
+- [Mamesound Branch](https://sourceforge.net/p/dosbox/code-0/commit_browser)
 - <a href="https://github.com/munt/munt/tree/master/DOSBox-mt32-patch" target="_blank" rel="noopener">Munt MT32</a>
 - FM Sound Adjusting
 - <a href="https://sourceforge.net/p/dosbox/patches/182/" target="_blank" rel="noopener">Innovation SSI-2001 reSID Emul.</a> (Tested with Ultima6)
