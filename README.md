@@ -1,3 +1,4 @@
+This is a Fork from [Dosbox](www.dosbox.com)
 DOSBox is a DOS-emulator that uses the SDL-library which makes DOSBox very easy to port to different platforms. DOSBox has already been ported to many different platforms, such as Windows, BeOS, Linux, MacOS X...
 
 DOSBox also emulates CPU:286/386 realmode/protected mode, Directory FileSystem/XMS/EMS, Tandy/Hercules/CGA/EGA/VGA/VESA graphics, a SoundBlaster/Gravis Ultra Sound card for excellent sound compatibility with older games...
@@ -6,7 +7,7 @@ You can "re-live" the good old days with the help of DOSBox, it can run plenty o
 
 DOSBox is totally free of charge and OpenSource.
 
-DOSBox v0.74 Manual (always use the latest version from [Dosbox](www.dosbox.com)
+DOSBox v0.74 Manual (always use the latest version from [Dosbox](www.dosbox.com))
 
 NOTE:
 
@@ -34,7 +35,7 @@ The default video output method, "texturenb", is equivalent to "openglnb" in
 vanilla DosBox. Now, "openglnb" and "opengl" use OpenGL 3 and can take advantage
 of external shaders.
 
-#### External Shaders
+### External Shaders
 
 The shaders are stored in a separate project. Download them from here:
 
