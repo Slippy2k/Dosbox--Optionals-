@@ -614,7 +614,7 @@ bool INT10_SetVideoMode_OTHER(Bit16u mode,bool clearmem) {
 	case MCH_HERC:
 		IO_WriteB(0x3b8,0x28);	// TEXT mode and blinking characters
 
-		Herc_Palette();
+		StartHerc_Palette();
 		VGA_DAC_CombineColor(0,0);
 		//VGA_DAC_CombineColor(1,7);
 
@@ -628,7 +628,7 @@ bool INT10_SetVideoMode_OTHER(Bit16u mode,bool clearmem) {
 		IO_WriteB(0x3d9,color_select);
 		real_writeb(BIOSMEM_SEG,BIOSMEM_CURRENT_MSR,mode_control);
 		real_writeb(BIOSMEM_SEG,BIOSMEM_CURRENT_PAL,color_select);
-		if (mono_cga) Mono_CGA_Palette();
+		if (mono_cga) StartMonoCGAPal();
 		break;
 	case MCH_TANDY:
 		/* Init some registers */

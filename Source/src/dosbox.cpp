@@ -419,6 +419,8 @@ void DOSBOX_Init(void) {
 	const char *innoqal[] = { "0" , "1", "2", "3", 0};
 	const char *innobas[] = { "280", "2a0", "2c0", "2e0", 0 };
 	const char *pcmode[] = { "old", "new", 0 };		
+	const char *cgapalmodes[] = { "green", "amber", "grey", "paperwhite", 0 };	
+	
 
 	/* Setup all the different modules making up DOSBox */
 	const char* machines[] = {
@@ -432,6 +434,7 @@ void DOSBOX_Init(void) {
 	Pstring = secprop->Add_string("machine",Property::Changeable::OnlyAtStart,"svga_s3");
 	Pstring->Set_values(machines);
 	Pstring->Set_help("The type of machine DOSBox tries to emulate.");
+
 
 	Pstring = secprop->Add_path("captures",Property::Changeable::Always,".\\DATA\\CAPTURE");
 	Pstring->Set_help("Directory where things like wave, midi, screenshot get captured.");
@@ -451,6 +454,22 @@ void DOSBOX_Init(void) {
 		"  This value is best left at its default to avoid problems with some games,\n"
 		"  though few games might require a higher value.\n"
 		"  There is generally no speed advantage when raising this value.");
+		
+	Pstring = secprop->Add_string("colormode_cga_mono", Property::Changeable::Always,"paperwhite");
+	Pstring->Set_values(cgapalmodes);
+	Pstring->Set_help(
+		"Only for Machine: CGA Mono. Start with your favorite Pal CGA Mono Color Mode.\n");	
+		
+	Pint = secprop->Add_int("cobrimode_cga_mono", Property::Changeable::WhenIdle,0);
+	Pint->SetMinMax(0,1);
+	Pint->Set_help(
+		"Only for Machine: CGA Mono. Change Contrast/Brigthness Variant. Values are 0 or 1.\n");
+		
+	Pstring = secprop->Add_string("colormode_hercules", Property::Changeable::Always,"paperwhite");
+	Pstring->Set_values(cgapalmodes);
+	Pstring->Set_help(
+		"Only for Machine: Hercules. Start with your favorite Hercules Color.\n");	
+		
 	secprop->AddInitFunction(&CALLBACK_Init);
 	secprop->AddInitFunction(&PIC_Init);//done
 	secprop->AddInitFunction(&PROGRAMS_Init);

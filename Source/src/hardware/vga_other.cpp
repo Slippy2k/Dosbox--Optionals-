@@ -20,6 +20,7 @@
 #include <string.h>
 #include <math.h>
 #include "dosbox.h"
+#include "control.h"
 #include "inout.h"
 #include "vga.h"
 #include "mem.h"
@@ -783,13 +784,42 @@ static void CycleMonoCGABright(bool pressed) {
 	Mono_CGA_Palette();
 }
 
+void StartMonoCGAPal(void) {
+	Section_prop *section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+	const char* sCGAMonoPal=section->Get_string("colormode_cga_mono");	
+	mono_cga_bright = section->Get_int("cobrimode_cga_mono");
+
+	if (!strcasecmp(sCGAMonoPal,"green"))
+	{
+		mono_cga_pal=0;
+		
+	}else if (!strcasecmp(sCGAMonoPal,"amber"))
+	{
+		mono_cga_pal=1;
+		
+	}else if (!strcasecmp(sCGAMonoPal,"grey"))
+	{
+		mono_cga_pal=2;
+		
+	}else if (!strcasecmp(sCGAMonoPal,"paperwhite"))
+	{
+		mono_cga_pal=3;
+	}
+	
+	if (mono_cga_pal>3){
+		mono_cga_pal=0;
+	}
+	if (mono_cga_bright>1){
+		mono_cga_bright=0;
+	}	
+	Mono_CGA_Palette();
+}
+
+
 void Mono_CGA_Palette(void) {
 	for (Bit8u ct=0;ct<16;ct++) {
-		VGA_DAC_SetEntry(ct,
-						 mono_cga_palettes[2*mono_cga_pal+mono_cga_bright][ct][0],
-						 mono_cga_palettes[2*mono_cga_pal+mono_cga_bright][ct][1],
-						 mono_cga_palettes[2*mono_cga_pal+mono_cga_bright][ct][2]
-		);
+		
+		VGA_DAC_SetEntry(ct,mono_cga_palettes[2*mono_cga_pal+mono_cga_bright][ct][0],mono_cga_palettes[2*mono_cga_pal+mono_cga_bright][ct][1],mono_cga_palettes[2*mono_cga_pal+mono_cga_bright][ct][2]);
 		VGA_DAC_CombineColor(ct,ct);
 	}
 }
@@ -801,20 +831,53 @@ static void CycleHercPal(bool pressed) {
 	VGA_DAC_CombineColor(1,7);
 }
 	
+	
+void StartHerc_Palette(void) {
+	Section_prop *section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+	const char* sHerculesColor=section->Get_string("colormode_hercules");	
+
+	if (!strcasecmp(sHerculesColor,"green"))
+	{
+		herc_pal=0;
+		
+	}else if (!strcasecmp(sHerculesColor,"amber"))
+	{
+		herc_pal=1;
+		
+	}else if (!strcasecmp(sHerculesColor,"paperwhite"))
+	{
+		herc_pal=2;
+		
+	}else if (!strcasecmp(sHerculesColor,"grey"))
+	{
+		herc_pal=3;
+	}
+	
+	if (herc_pal>3){
+		herc_pal=0;
+	}
+	Herc_Palette();
+	VGA_DAC_CombineColor(1,7);
+}
+	
 void Herc_Palette(void) {	
 	switch (herc_pal) {
-	case 0:	// White
-		VGA_DAC_SetEntry(0x7,0x2a,0x2a,0x2a);
-		VGA_DAC_SetEntry(0xf,0x3f,0x3f,0x3f);
-		break;
+	case 0:	// Green
+		VGA_DAC_SetEntry(0x7,0x00,0x26,0x00);
+		VGA_DAC_SetEntry(0xf,0x00,0x3f,0x00);
+		break;		
 	case 1:	// Amber
 		VGA_DAC_SetEntry(0x7,0x34,0x20,0x00);
 		VGA_DAC_SetEntry(0xf,0x3f,0x34,0x00);
 		break;
-	case 2:	// Green
-		VGA_DAC_SetEntry(0x7,0x00,0x26,0x00);
-		VGA_DAC_SetEntry(0xf,0x00,0x3f,0x00);
+	case 2:	// White
+		VGA_DAC_SetEntry(0x7,0x2a,0x2a,0x2a);
+		VGA_DAC_SetEntry(0xf,0x3f,0x3f,0x3f);
 		break;
+	case 3:	// Grey
+		VGA_DAC_SetEntry(0x7,0x1c,0x1c,0x1c);
+		VGA_DAC_SetEntry(0xf,0x2d,0x2d,0x2d);
+		break;		
 	}
 	VGA_DAC_CombineColor(1,0x7);
 	VGA_DAC_CombineColor(2,0xf);
