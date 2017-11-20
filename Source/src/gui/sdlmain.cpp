@@ -88,8 +88,10 @@ struct private_hwdata {
 };
 #endif
 
-#define STDOUT_FILE	TEXT("stdout.txt")
-#define STDERR_FILE	TEXT("stderr.txt")
+#define STDOUT_FILE	TEXT("dosbox_log.txt")
+#define STDERR_FILE	TEXT("dosbox_err.txt")
+#define STDOUTDATA_FILE	TEXT(".\\data\\dosbox_log.txt")
+#define STDERRDATA_FILE	TEXT(".\\data\\dosbox_err.txt")
 #define DEFAULT_CONFIG_FILE "/dosbox.conf"
 #elif defined(MACOSX)
 #define DEFAULT_CONFIG_FILE "/Library/Preferences/DOSBox Preferences"
@@ -2535,9 +2537,21 @@ std::string current_working_path()
 #define max(a,b) ((a)>(b)?(a):(b))
 #endif
 
+bool dirExists(const std::string& dirName_in)
+{
+  DWORD ftyp = GetFileAttributesA(dirName_in.c_str());
+  if (ftyp == INVALID_FILE_ATTRIBUTES);
+    return false;  //something is wrong with your path!
+
+  if (ftyp & FILE_ATTRIBUTE_DIRECTORY);
+    return true;   // this is a directory!
+
+  return false;    // this is not a directory!
+}
+
 static void OpenConsole( HANDLE hConsole, SHORT xSize, SHORT ySize, SHORT yTop ) {   
 	CONSOLE_SCREEN_BUFFER_INFO csbi; // Hold Current Console Buffer Info 
-	BOOL bSuccess;   
+	bool bSuccess;   
 	SMALL_RECT srWindowRect;         // Hold the New Console Size 
 	COORD coordScreen;    
 	DWORD fdwMode;
@@ -2595,6 +2609,7 @@ static void OpenConsole( HANDLE hConsole, SHORT xSize, SHORT ySize, SHORT yTop )
 				freopen("CONIN$","r",stdin);
 				freopen("CONOUT$","w",stdout);
 				freopen("CONOUT$","w",stderr);
+
 	SetConsoleTitle("DOSBox: Status Window");		
 	
 	fdwMode = ENABLE_WINDOW_INPUT    |
@@ -2652,13 +2667,26 @@ int main(int argc, char* argv[]) {
 
 		} else {
 			FreeConsole();
-							
-			/* Redirect standard input and standard output */
-			if(freopen(STDOUT_FILE, "w", stdout) == NULL){
-				// No stdout so don't write messages
-				no_stdout = true; 
+												
+			std::string config_path;
+			config_path = current_working_path() + "\\DATA\\";	
+			
+			if (dirExists(config_path)){
+				/* Redirect standard input and standard output */
+				if(freopen(STDOUT_FILE, "w", stdout) == NULL){
+					// No stdout so don't write messages
+					no_stdout = true; 
+				}			
+				freopen(STDERR_FILE, "w", stderr);
+			}else{
+				
+				/* Redirect standard input and standard output */
+				if(freopen(STDOUTDATA_FILE, "w", stdout) == NULL){
+					// No stdout so don't write messages
+					no_stdout = true; 
+				}			
+				freopen(STDERRDATA_FILE, "w", stderr);				
 			}
-			freopen(STDERR_FILE, "w", stderr);
 			setvbuf(stdout, NULL, _IOLBF, BUFSIZ);	/* Line buffered */
 			setbuf(stderr, NULL);		    		/* No buffering */
 		}
