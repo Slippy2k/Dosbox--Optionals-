@@ -413,9 +413,11 @@ typedef struct {
 
 /* Hercules Palette function */
 void Herc_Palette(void);
+void StartHerc_Palette(void);
 
 /* CGA Mono Palette function */
 void Mono_CGA_Palette(void);
+void StartMonoCGAPal(void);
 
 /* Functions for different resolutions */
 void VGA_SetMode(VGAModes mode);

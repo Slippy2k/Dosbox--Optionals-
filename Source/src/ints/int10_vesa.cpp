@@ -27,6 +27,7 @@
 #include "inout.h"
 #include "int10.h"
 #include "dos_inc.h"
+#include "control.h"
 
 #define VESA_SUCCESS          0x00
 #define VESA_FAIL             0x01
@@ -548,10 +549,15 @@ static Bitu VESA_PMSetStart(void) {
 
 
 
-
+extern int vesa_modelist_cap;
 void INT10_SetupVESA(void) {
+	
+	int vesa_modelist_cap = 0;
+	Section_prop *section = static_cast<Section_prop *>(control->GetSection("dosbox"));
+	vesa_modelist_cap = section->Get_int("CutVesaResolutionIndex");
+	
 	/* Put the mode list somewhere in memory */
-	Bitu i;
+	Bitu i,modecount=0;
 	i=0;
 	int10.rom.vesa_modes=RealMake(0xc000,int10.rom.used);
 //TODO Maybe add normal vga modes too, but only seems to complicate things
@@ -561,10 +567,16 @@ void INT10_SetupVESA(void) {
 		else {
 			if (svga.accepts_mode(ModeList_VGA[i].mode)) canuse_mode=true;
 		}
+		
+
+		if (canuse_mode && vesa_modelist_cap > 0 && modecount >= vesa_modelist_cap)
+			canuse_mode = false;
+		
 		if (ModeList_VGA[i].mode>=0x100 && canuse_mode) {
 			if ((!int10.vesa_oldvbe) || (ModeList_VGA[i].mode<0x120)) {
 				phys_writew(PhysMake(0xc000,int10.rom.used),ModeList_VGA[i].mode);
 				int10.rom.used+=2;
+				modecount++;
 			}
 		}
 		i++;

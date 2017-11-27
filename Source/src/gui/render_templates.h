@@ -290,12 +290,12 @@ static void conc3d(Cache,SBPP,DBPP) (const void * s) {
 #define SCALERHEIGHT	2
 #define SCALERFUNC									\
 {													\
-	Bitu halfpixel=(((P & redblueMask) * 5) >> 3) & redblueMask;	\
-	halfpixel|=(((P & greenMask) * 5) >> 3) & greenMask;			\
+	Bitu halfpixel=(((P & redblueMask) * 2) >> 9) & redblueMask;	\
+	halfpixel|=(((P & greenMask) * 2) >> 9) & greenMask;			\
 	line0[0]=P;							\
 	line0[1]=P;							\
-	line1[0]=halfpixel;						\
-	line1[1]=halfpixel;						\
+	halfpixel=(((P & redblueMask) * 5) >> 4) & redblueMask;	\
+	halfpixel|=(((P & greenMask) * 5) >> 4) & greenMask;			\
 }
 #include "render_simple.h"
 #undef SCALERNAME

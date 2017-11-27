@@ -2244,6 +2244,9 @@ public:
 		std::string type = p->GetSection()->Get_string("type");
 		std::string str ;
 		CommandLine cmd(0,p->GetSection()->Get_string("parameters"));
+		
+		LOG_MSG("Cycle Type = %s",(const char*)p->GetSection()->Get_string("type"));
+		
 		if (type=="max") {
 			CPU_CycleMax=0;
 			CPU_CyclePercUsed=100;
@@ -2301,12 +2304,88 @@ public:
 						}
 					}
 				}
-			} else if(type =="fixed") {
+			} else if(type =="i80386DX/25") {								
+				CPU_CycleMax=5592;
+				
+			}else if(type =="fixed") {
 				cmd.FindCommand(1,str);
 				int rmdval=0;
 				std::istringstream stream(str);
 				stream >> rmdval;
 				CPU_CycleMax=(Bit32s)rmdval;
+							
+			} else if(type =="i8088_477") {
+				CPU_CycleMax=341;	
+				
+			} else if(type =="i8088_716") {
+				CPU_CycleMax=460;		
+				
+			} else if(type =="i8088_954") {
+				CPU_CycleMax=618;	
+
+			} else if(type =="i286_10") {
+				CPU_CycleMax=1778;	
+				
+			} else if(type =="i286_12") {
+				CPU_CycleMax=2616;	
+
+			} else if(type =="i286_16") {
+				CPU_CycleMax=3360;					
+				
+			} else if(type =="i286_20") {
+				CPU_CycleMax=4440;					
+				
+			} else if(type =="i286_25") {
+				CPU_CycleMax=5240;		
+
+			} else if(type =="i386dx_25") {
+				CPU_CycleMax=7785;
+
+			} else if(type =="i386dx_33") {
+				CPU_CycleMax=9349;	
+				
+			} else if(type =="i386dx_40") {
+				CPU_CycleMax=9384;	
+				
+			} else if(type =="i486sx_25") {
+				CPU_CycleMax=9870;
+							
+			} else if(type =="i486dx_33") {
+				CPU_CycleMax=13350;	
+				
+			} else if(type =="i486sx_33") {
+				CPU_CycleMax=13461;		
+
+			} else if(type =="i486sx_40") {
+				CPU_CycleMax=16100;					
+				
+			} else if(type =="i486dx_50") {
+				CPU_CycleMax=20100;					
+								
+			} else if(type =="i486dx2_66") {
+				CPU_CycleMax=27182;	
+
+			} else if(type =="i486sx2_80") {
+				CPU_CycleMax=32501;		
+
+			} else if(type =="i486dx2_100") {
+				CPU_CycleMax=40042;
+
+			} else if(type =="i486dx4_100") {
+				CPU_CycleMax=50821;	
+
+			} else if(type =="i486dx4_120") {
+				CPU_CycleMax=60174;	
+
+			} else if(type =="p60") {
+				CPU_CycleMax=51330;	
+				
+			} else if(type =="p75") {
+				CPU_CycleMax=69159;					
+
+			} else if(type =="p100") {
+				CPU_CycleMax=77500;								
+				
 			} else {
 				std::istringstream stream(type);
 				int rmdval=0;

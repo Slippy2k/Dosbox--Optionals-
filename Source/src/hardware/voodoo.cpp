@@ -161,10 +161,9 @@ void VOODOO_PCI_SetLFB(Bit32u lfbaddr) {
 }
 
 bool VOODOO_PCI_CheckLFBPage(Bitu page) {
-	if ((page>=(voodoo_current_lfb>>12)) &&
-		(page<(voodoo_current_lfb>>12)+VOODOO_PAGES))
-		return true;
-	return false;
+	if (voodoo_current_lfb != 0 && (page>=(voodoo_current_lfb>>12)) && (page<(voodoo_current_lfb>>12)+VOODOO_PAGES))
+ 		return true;
+ 	return false;
 }
 
 PageHandler* VOODOO_GetPageHandler() {

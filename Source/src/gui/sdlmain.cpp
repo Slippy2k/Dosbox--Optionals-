@@ -268,6 +268,7 @@ static void SDL_Quit_Wrapper(void)
 
 extern const char* RunningProgram;
 extern bool CPU_CycleAutoAdjust;
+extern bool CPU_FastForward;
 //Globals for keyboard initialisation
 bool startup_state_numlock=true;
 bool startup_state_capslock=false;
@@ -287,7 +288,89 @@ void GFX_SetTitle(Bit32s cycles,Bits frameskip,bool paused){
 	} else if(CPU_CycleAutoAdjust && internal_cycles >= 100) {	
 		sprintf(title,"DOSBox %s %s, CPU Cycles: %3d Max, Frameskip %2d, Program: %8s",VERSION,DOSBOXREVISION,internal_cycles,internal_frameskip,RunningProgram);		
 	} else {
-		sprintf(title,"DOSBox %s %s, CPU Cycles: %3d, Frameskip %2d, Program: %8s",VERSION,DOSBOXREVISION,internal_cycles,internal_frameskip,RunningProgram);
+		
+		char strWinTitle[256];
+		strcpy(strWinTitle,"DOSBox %s %s, CPU Cycles: %3d");
+		
+		switch(internal_cycles){
+			case 341:
+				strcat(strWinTitle, " (CPU 8088/4.77mhz)");
+				break;
+			case 460:
+				strcat(strWinTitle, " (CPU 8088/7.16mhz)");
+				break;
+			case 618:
+				strcat(strWinTitle, " (CPU 8088/9.54mhz)");
+				break;	
+			case 1778:
+				strcat(strWinTitle, " (CPU 286/10mhz)");
+				break;
+			case 2616:
+				strcat(strWinTitle, " (CPU 286/12mhz)");
+				break;	
+			case 3360:
+				strcat(strWinTitle, " (CPU 286/16mhz)");
+				break;	
+			case 4440:
+				strcat(strWinTitle, " (CPU 286/20mhz)");
+				break;
+			case 5240:
+				strcat(strWinTitle, " (CPU 286/25mhz)");
+				break;		
+			case 7785:
+				strcat(strWinTitle, " (CPU 386DX/25mhz)");
+				break;
+			case 9349:
+				strcat(strWinTitle, " (CPU 386DX/33mhz)");
+				break;
+			case 9384:
+				strcat(strWinTitle, " (CPU 386DX/40mhz)");
+				break;	
+			case 9870:
+				strcat(strWinTitle, " (CPU 486SX/25mhz)");
+				break;
+			case 13350:
+				strcat(strWinTitle, " (CPU 486DX/33mhz)");
+				break;	
+			case 13461:
+				strcat(strWinTitle, " (CPU 486SX/33mhz)");
+				break;
+			case 16100:
+				strcat(strWinTitle, " (CPU 486SX/40mhz)");
+				break;	
+			case 20100:
+				strcat(strWinTitle, " (CPU 486DX/50mhz)");
+				break;
+			case 27182:
+				strcat(strWinTitle, " (CPU 486DX-2/66mhz)");
+				break;
+			case 32501:
+				strcat(strWinTitle, " (CPU 486DX-2/80mhz)");
+				break;
+			case 40042:
+				strcat(strWinTitle, " (CPU 486DX-2/100mhz)");
+				break;
+			case 50821:
+				strcat(strWinTitle, " (CPU 486DX-4/100mhz)");
+				break;
+			case 60174:
+				strcat(strWinTitle, " (CPU 486DX-4/120mhz)");
+				break;	
+			case 51330:
+				strcat(strWinTitle, " (CPU Pentium/60 [~66mhz]");
+				break;
+			case 69159:
+				strcat(strWinTitle, " (CPU Pentium/75 [~90mhz])");
+				break;
+			case 77500:
+				strcat(strWinTitle, " (CPU Pentium/100mhz)");
+				break;					
+			default:
+				break;
+		}
+		strcat(strWinTitle,", Frameskip %2d, Program: %8s");		
+		//sprintf(title,"DOSBox %s %s, CPU Cycles: %3d, Frameskip %2d, Program: %8s",VERSION,DOSBOXREVISION,internal_cycles,internal_frameskip,RunningProgram);
+		sprintf(title,strWinTitle,VERSION,DOSBOXREVISION,internal_cycles,internal_frameskip,RunningProgram);		
 	}
 
 	if(paused){
@@ -298,6 +381,10 @@ void GFX_SetTitle(Bit32s cycles,Bits frameskip,bool paused){
 	if(sdl.mouse.locked || mouselocked ){
 		strcat(title,"     (Ctrl-F10 Releases Mouse)");
 	}
+	
+	if(CPU_FastForward){
+		strcat(title," (Fast Forward On)");
+	}	
 	
 	
 	SDL_SetWindowTitle(sdl.window,title); // VERSION is gone...
@@ -940,7 +1027,25 @@ dosurface:
 #if C_OPENGL
 	case SCREEN_OPENGL:
 	{
-		if (!(flags&GFX_CAN_32) || (flags & GFX_RGBONLY)) goto dosurface; // BGRA otherwise
+		if (flags & GFX_CAN_8){
+			LOG_MSG("SDL: OpenGL, Using 8Bit");
+		}
+		if (flags & GFX_CAN_15){
+			LOG_MSG("SDL: OpenGL, Using 15Bit");
+		}		
+		if (flags & GFX_CAN_16){
+			LOG_MSG("SDL: OpenGL, Using 16Bit");
+		}		
+		if (flags & GFX_CAN_32){
+			LOG_MSG("SDL: OpenGL, Using 32Bit");			
+		}		
+		if (flags & GFX_RGBONLY){
+			LOG_MSG("SDL: OpenGL, Using RGB Only");
+		}		
+		
+		if (!(flags & GFX_CAN_32) || (flags & GFX_RGBONLY)) {
+			//goto dosurface; // BGRA otherwise
+		}
 		int texsize=2 << int_log2(width > height ? width : height);
 		if (texsize>sdl.opengl.max_texsize) {
 			LOG_MSG("SDL: OpenGL, No support for texturesize of %d, falling back to surface",texsize);
@@ -985,6 +1090,7 @@ dosurface:
 		SDL_GL_SetSwapInterval(sdl.desktop.vsync ? 1 : 0);
 
 		sdl.opengl.framebuf=calloc(1, texsize*texsize*4);		//32 bit color
+
 
 		sdl.opengl.pitch=width*4;
 		int windowHeight;
@@ -2220,23 +2326,28 @@ void Config_Add_SDL() {
 	Prop_multival* Pmulti;
 
 	Pbool = sdl_sec->Add_bool("fullscreen",Property::Changeable::Always,false);
-	Pbool->Set_help("Start dosbox directly in fullscreen. (Press ALT-Enter to go back)");
+	Pbool->Set_help(  "================================================================================================\n"
+                      "Start dosbox directly in fullscreen. (Press ALT-Enter to go back)");
 
-	Pbool = sdl_sec->Add_bool("vsync",Property::Changeable::Always,false);
-	Pbool->Set_help("Sync to Vblank IF supported by the output device and renderer (if relevant).\n"
-	                "It can reduce screen flickering, but it can also result in a slow DOSBox.");
+	Pbool = sdl_sec->Add_bool("vsync",Property::Changeable::Always,false);	
+	Pbool->Set_help(  "================================================================================================\n"
+	                  "Sync to Vblank IF supported by the output device and renderer (if relevant). It can reduce\n"
+	                  "screen flickering, but it can also result in a slow DOSBox.");
 
 	Pstring = sdl_sec->Add_string("fullresolution",Property::Changeable::Always,"0x0");
-	Pstring->Set_help("What resolution to use for fullscreen: original, desktop or a fixed size (e.g. 1024x768).\n"
-	                  "  Using your monitor's native resolution with aspect=true might give the best results.\n"
-			  "  If you end up with small window on a large screen, try an output different from surface.");
+	Pstring->Set_help("================================================================================================\n"
+	                  "What resolution to use for fullscreen: original, desktop or a fixed size (e.g. 1024x768).\n"
+	                  "Using your monitor's native resolution with aspect=true might give the best results. If you end\n"
+			          "up with small window on a large screen, try an output different from surface.");
 
-	Pstring = sdl_sec->Add_string("windowresolution",Property::Changeable::Always,"1280x800");
-	Pstring->Set_help("Scale the window to this size IF the output device supports hardware scaling.\n"
-	                  "  (output=surface does not!)");
+	Pstring = sdl_sec->Add_string("windowresolution",Property::Changeable::Always,"1280x800");	
+	Pstring->Set_help("================================================================================================\n"
+	                  "Scale the window to this size IF the output device supports hardware scaling.\n"
+	                  "(output=surface does not!)");
 
 	Pbool = sdl_sec->Add_bool("windowborderless",Property::Changeable::Always, false);
-	Pbool->Set_help("Remove the border in Window mode");					  
+	Pbool->Set_help(  "================================================================================================\n"
+	                  "Remove the border in Window mode");					  
 	const char* outputs[] = {
 		"surface",
 		"texture",
@@ -2247,23 +2358,26 @@ void Config_Add_SDL() {
 #endif
 		0 };
 	Pstring = sdl_sec->Add_string("output",Property::Changeable::Always,"texturenb");
-	Pstring->Set_help("What video system to use for output.\n"
+	Pstring->Set_help("================================================================================================\n"
+	                  "What video system to use for output.\n"
 					  "Info DOSBox SDL1  -  DOSBox SDL2\n"
 					  "     Surface  is now Surface\n"
 					  "     OpenGL   is now Texture\n"
-					  "     OpenGLNB is now TextureNB\n"
-					  "NB means No Bilinear Filtering. Dont't use OpenGL/NB with Voodoo.\n"
-					  "OpenGL and OpenGLNB can now take advantage of external shaders.");
+					  "     OpenGLNB is now TextureNB\n"					  
+					  "NB means No Bilinear Filtering. Dont't use OpenGL/NB with Voodoo. OpenGL and OpenGLNB can now\n"
+					  "take advantage of external shaders.");
 	Pstring->Set_values(outputs);
 
 	Pstring = sdl_sec->Add_string("gl.shpath",Property::Changeable::Always,".\\DATA\\SHADERS");	
-	Pstring->Set_help("Set Shader Path");	
-	Pstring = sdl_sec->Add_string("gl.shader",Property::Changeable::Always,"crt-lottes_mod");
-	Pstring->Set_help("What set of GLSL shaders to use with an OpenGL output. Keep empty if this is not desired.\n"
-	                  "  Note that in case it is used, the respective shader files must be found in the \"shaders\"\n"
-	                  "  subdirectory relatively to where the default DOSBox configuration file is stored or change\n"
-	                  "  the path in \"gl.shpath\" For shader file naming convention, suppose that you have a pair\n"
-	                  "  of shader files ready: mysample.vert and mysample.frag. Then shader=mysample should be set.\n");
+	Pstring->Set_help("================================================================================================\n"
+	                  "Set Shader Path");	
+	Pstring = sdl_sec->Add_string("gl.shader",Property::Changeable::Always,"crt-lottes_mod");	
+	Pstring->Set_help("================================================================================================\n"
+	                  "What set of GLSL shaders to use with an OpenGL output. Keep empty if this is not desired. Note\n"
+	                  "that in case it is used, the respective shader files must be found in the \"shaders\" subdirectory\n"
+	                  "relatively to where the default DOSBox configuration file is stored or change the path in \n"
+	                  "\"gl.shpath\" For shader file naming convention, suppose that you have a pair of shader files ready:\n"
+	                  "mysample.vert and mysample.frag. Then shader=mysample should be set.");
 
 	const char* renderers[] = {
 		"auto",
@@ -2276,24 +2390,30 @@ void Config_Add_SDL() {
 		"opengles2",		
 		"software",
 		0 };
-	Pstring = sdl_sec->Add_string("texture.renderer",Property::Changeable::Always,"auto");
-	Pstring->Set_help("Choose a renderer driver if output=texture or output=texturenb. Use output=auto for an automatic choice.");
+	Pstring = sdl_sec->Add_string("texture.renderer",Property::Changeable::Always,"auto");		
+	Pstring->Set_help("================================================================================================\n"
+	                  "Choose a renderer driver if output=texture or output=texturenb. Use output=auto for an automatic\n"
+	                  "choice.");
 	Pstring->Set_values(renderers);
 
 	Pbool = sdl_sec->Add_bool("autolock",Property::Changeable::Always,true);
-	Pbool->Set_help("Mouse will automatically lock, if you click on the screen. (Press CTRL-F10 to unlock)");
+	Pbool->Set_help(  "================================================================================================\n"
+	                  "Mouse will automatically lock, if you click on the screen. (Press CTRL-F10 to unlock)");
 
 	Pint = sdl_sec->Add_int("sensitivity",Property::Changeable::Always,100);
 	Pint->SetMinMax(1,1000);
-	Pint->Set_help("Mouse sensitivity.");
+	Pint->Set_help(   "================================================================================================\n"
+	                  "Mouse sensitivity.");
 
 	Pbool = sdl_sec->Add_bool("waitonerror",Property::Changeable::Always, true);
-	Pbool->Set_help("Wait before closing the console if dosbox has an error.");
+	Pbool->Set_help(  "================================================================================================\n"
+	                  "Wait before closing the console if dosbox has an error.");
 
 	Pmulti = sdl_sec->Add_multi("priority", Property::Changeable::Always, ",");
-	Pmulti->SetValue("higher,normal");
-	Pmulti->Set_help("Priority levels for dosbox. Second entry behind the comma is for when dosbox is not focused/minimized.\n"
-	                 "  pause is only valid for the second entry.");
+	Pmulti->SetValue( "higher,normal");		
+	Pmulti->Set_help( "================================================================================================\n"
+	                  "Priority levels for dosbox. Second entry behind the comma is for when dosbox is not focused/\n"
+	                  "minimized. pause is only valid for the second entry.");
 
 	const char* actt[] = { "lowest", "lower", "normal", "higher", "highest", "pause", 0};
 	Pstring = Pmulti->GetSection()->Add_string("active",Property::Changeable::Always,"higher");
@@ -2304,29 +2424,34 @@ void Config_Add_SDL() {
 	Pstring->Set_values(inactt);
 
 	Pstring = sdl_sec->Add_path("mapperfile",Property::Changeable::Always,".\\DATA\\" MAPPERFILE);
-	Pstring->Set_help("File used to load/save the key/event mappings from. Resetmapper only works with the default value.");
+	Pstring->Set_help( "================================================================================================\n"
+	                   "File used to load/save the key/event mappings from. Resetmapper only works with the default value.");
 		
 	Pint = sdl_sec->Add_int("sensitivity",Property::Changeable::Always,100);	
 	
 	Pbool = sdl_sec->Add_bool("Dosbox Splash Activate",Property::Changeable::Always,true);	
-	Pbool->Set_help("Enable / Disable DOSBox Splash. Default: true. Set this to false to increase DOSBox startup.");	
+	Pbool->Set_help(   "================================================================================================\n"
+	                   "Enable / Disable DOSBox Splash. Default: true. Set this to false to increase DOSBox startup.");	
 	
 	Pint = sdl_sec->Add_int("Dosbox Splash Fadetime",Property::Changeable::Always,100);	
 	Pint->SetMinMax(0,10000);	
-	Pint->Set_help("Splash Fade Time. 0 = Disabled. Default = 100");	
+	Pint->Set_help(    "================================================================================================\n"
+	                   "Splash Fade Time. 0 = Disabled. Default = 100");	
 	
 	Pint = sdl_sec->Add_int("Dosbox Splash Duration",Property::Changeable::Always,600);	
 	Pint->SetMinMax(0,10000);	
-	Pint->Set_help("Splash Duration. 0 = Disabled. Default = 600");	
+	Pint->Set_help(    "================================================================================================\n"
+	                   "Splash Duration. 0 = Disabled. Default = 600");	
 	
 	Pint = sdl_sec->Add_int("Dosbox Shutdown Key",Property::Changeable::Always,0);
 	Pint->SetMinMax(0,4);	
-	Pint->Set_help("Change the DOSBox Shutdown Key:\n"
-				   "0: CTRL-F9  (default)\n"
-				   "1: CTRL+ALT+(Keypad *)\n"
-				   "2: CTRL+ALT+(Keypad -)\n"
-				   "3: CTRL+ALT+(Keypad +)\n"
-				   "4: CTRL+ALT+(Keypad /)\n");			
+	Pint->Set_help(    "================================================================================================\n"
+	                   "Change the DOSBox Shutdown Key:\n"
+				       "0: CTRL-F9  (default)\n"
+				       "1: CTRL+ALT+(Keypad *)\n"
+				       "2: CTRL+ALT+(Keypad -)\n"
+				       "3: CTRL+ALT+(Keypad +)\n"
+				       "4: CTRL+ALT+(Keypad /)\n");			
 }
 
 static void show_warning(char const * const message) {
