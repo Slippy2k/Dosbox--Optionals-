@@ -25,6 +25,7 @@
 #include "../gui/render_scalers.h"
 #include "vga.h"
 #include "pic.h"
+#include "control.h"
 
 //#undef C_DEBUG
 //#define C_DEBUG 1
@@ -1318,6 +1319,9 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 
 	double aspect_ratio = pheight / pwidth;
 	
+	Section_prop *section = static_cast<Section_prop *>(control->GetSection("render"));	
+	bool bAspectRatio = section->Get_bool("aspect");
+	
 	LOG_MSG("Aspect Ratio = %d",aspect_ratio);
 
 	vga.draw.delay.parts = vga.draw.delay.vdend/vga.draw.parts_total;
@@ -1359,8 +1363,18 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		doublewidth=true;
 		width<<=2;
 		if ((IS_VGA_ARCH) && (svgaCard==SVGA_None)) {
+			LOG_MSG("VGA MODE Ratio = M_VGA ARCH (Aspect=%d)",aspect_ratio);
 			bpp=16;
 			VGA_DrawLine = VGA_Draw_Xlat16_Linear_Line;
+			/* Marty2DOS ================================================================*/			
+			if (svgaCard==SVGA_None && bAspectRatio == true)  {
+				aspect_ratio =0.6;
+				doubleheight =true;	
+				doublewidth  =true;						
+			} else if (svgaCard==SVGA_None && bAspectRatio == false){
+				aspect_ratio =1.0;				
+			}
+			/* Marty2DOS ================================================================*/			
 		} else VGA_DrawLine = VGA_Draw_Linear_Line;
 		break;
 		
@@ -1413,11 +1427,11 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 			bpp=16;
 			VGA_DrawLine = VGA_Draw_Xlat16_Linear_Line;				
 		} else{
-			/* Marty2DOS =================================================*/
+			/* Marty2DOS ================================================================*/
 			// LOG_MSG("VGA MODE Ratio = M_EGA III");
 			VGA_DrawLine=VGA_Draw_Linear_Line;	
-			aspect_ratio=1.125;// ADDED
-			/* Marty2DOS =================================================*/			
+			aspect_ratio=1.125;													 // ADDED
+			/* Marty2DOS ================================================================*/			
 		}
 		vga.draw.linear_base = vga.fastmem;
 		vga.draw.linear_mask = (vga.vmemwrap<<1) - 1;
@@ -1450,44 +1464,54 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		doublewidth=(vga.seq.clocking_mode & 0x8) > 0;
 		if ((IS_VGA_ARCH) && (svgaCard==SVGA_None)) {
 			// vgaonly: allow 9-pixel wide fonts
+			VGA_DrawLine=VGA_TEXT_Xlat16_Draw_Line;
+			bpp=16;			
 			if (vga.seq.clocking_mode&0x01) {
-				LOG_MSG("VGA MODE Ratio A");	
+				LOG_MSG("VGA MODE Ratio = M_TEXT (VGA Seq Clocking Mode)");		
 				vga.draw.char9dot = false;
 				width*=8;
 			} else {
-				/* Marty2DOS =================================================*/					
-				// LOG_MSG("VGA MODE Ratio B");
-				/* There is any problem. with the aspect=true Temp Fix*/
-				/* I set this to 8, it looks nicer and set the aspect ratio to 0.825 */
+				/* Marty2DOS ============================================================*/					
+				
+				LOG_MSG("VGA MODE Ratio = M_TEXT (#00001)");	
+					/* There is any problem. with the aspect=true Temp Fix*/
+					/* I set this to 8, it looks nicer and set the aspect ratio to 0.825 */
 				vga.draw.char9dot = false;
-				if (aspect_ratio >= 1){
-					// LOG_MSG("VGA MODE Ratio B2");
+				
+				if (bAspectRatio == true){
+					LOG_MSG("VGA MODE Ratio = M_TEXT (#00002)");
 					width*=8;// Was 9
-					aspect_ratio*=0.8255;					
+					aspect_ratio =1.0;
+					doubleheight =true;	
+					doublewidth  =true;	
 				} else {					
-					// LOG_MSG("VGA MODE Ratio B3");
-					width*=8;// Was 9
+					LOG_MSG("VGA MODE Ratio = M_TEXT (#00003)");
+					width*=8;// Was 9					
 				}
-				/* Marty2DOS =================================================*/
+				/* Marty2DOS ============================================================*/
 			}
-			VGA_DrawLine=VGA_TEXT_Xlat16_Draw_Line;
-			bpp=16;
 		} else {
-			/* Marty2DOS =================================================*/
+			/* Marty2DOS ================================================================*/
 			// not vgaonly: force 8-pixel wide fonts
 			if (machine==MCH_EGA){
-				// LOG_MSG("VGA MODE Ratio B4");
-				width*=8; //On EGA The Aspect Ratio is missing
+				LOG_MSG("VGA MODE Ratio = M_TEXT/MCH_EGA");
+				width*=8; 
 				vga.draw.char9dot = false;
-				VGA_DrawLine=VGA_TEXT_Draw_Line;
-				aspect_ratio*=1.425;				
+				VGA_DrawLine=VGA_TEXT_Draw_Line;				
+				
+				//On EGA The Aspect Ratio is missing
+				if (bAspectRatio) {
+					aspect_ratio*=1.62;
+					doubleheight =true;	
+					doublewidth  =true;				
+				}
 			}else {
-				// LOG_MSG("VGA MODE Ratio B5");	
-				width*=8; // 8 bit wide text font
+				LOG_MSG("VGA MODE Ratio = M_TEXT (#00004)");
+				width*=8; 											// 8 bit wide text font
 				vga.draw.char9dot = false;
 				VGA_DrawLine=VGA_TEXT_Draw_Line;			
 			}
-			/* Marty2DOS =================================================*/
+			/* Marty2DOS =================================================================*/
 		}
 		break;
 	case M_HERC_GFX:
