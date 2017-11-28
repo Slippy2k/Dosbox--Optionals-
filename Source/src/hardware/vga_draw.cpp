@@ -1317,7 +1317,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		break;
 	}
 
-	double aspect_ratio = pheight / pwidth;
+	float  aspect_ratio = pheight / pwidth;
 	
 	Section_prop *section = static_cast<Section_prop *>(control->GetSection("render"));	
 	bool bAspectRatio = section->Get_bool("aspect");
@@ -1366,11 +1366,23 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 			LOG_MSG("VGA MODE Ratio = M_VGA ARCH (Aspect=%d)",aspect_ratio);
 			bpp=16;
 			VGA_DrawLine = VGA_Draw_Xlat16_Linear_Line;
-			/* Marty2DOS ================================================================*/			
-			if (svgaCard==SVGA_None && bAspectRatio == true)  {
-				aspect_ratio =0.6;
-				doubleheight =true;	
-				doublewidth  =true;						
+			/* Marty2DOS ================================================================*/			 
+			if (svgaCard==SVGA_None && bAspectRatio == true )  {
+				
+				//LOG_MSG("VGA MODE X %d",(int)(aspect_ratio*10.0));
+				
+				switch ((int)(aspect_ratio*10.0)){				
+					case 10://1946853688:
+						break;  				   			// Fix the Kukoo2 Scene Demo
+						
+					case 12://858993459:			   		// Seems default to VGA?
+					default:
+						aspect_ratio =0.6;
+						doubleheight =true;	
+						doublewidth  =true;						
+						break;
+				}
+					
 			} else if (svgaCard==SVGA_None && bAspectRatio == false){
 				aspect_ratio =1.0;				
 			}
@@ -1388,7 +1400,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		}
 		// fall-through
 	case M_LIN32:
-		LOG_MSG("VGA MODE Ratio = M_LIN32");	
+		LOG_MSG("VGA MODE Ratio = M_LIN32");		
 		width<<=3;
 		if (vga.crtc.mode_control & 0x8)
  			doublewidth = true;

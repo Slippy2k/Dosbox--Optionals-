@@ -21,6 +21,7 @@
 #include "inout.h"
 #include "vga.h"
 #include "mem.h"
+#include "control.h"
 
 void SVGA_S3_WriteCRTC(Bitu reg,Bitu val,Bitu iolen) {
 	switch (reg) {
@@ -515,7 +516,7 @@ bool SVGA_S3_AcceptsMode(Bitu mode) {
 	return VideoModeMemSize(mode) < vga.vmemsize;
 }
 
-void SVGA_Setup_S3Trio(void) {
+void SVGA_Setup_S3Trio(void) {	
 	svga.write_p3d5 = &SVGA_S3_WriteCRTC;
 	svga.read_p3d5 = &SVGA_S3_ReadCRTC;
 	svga.write_p3c5 = &SVGA_S3_WriteSEQ;
@@ -530,27 +531,56 @@ void SVGA_Setup_S3Trio(void) {
 	svga.hardware_cursor_active = &SVGA_S3_HWCursorActive;
 	svga.accepts_mode = &SVGA_S3_AcceptsMode;
 
-	if (vga.vmemsize == 0)
-		vga.vmemsize = 2*1024*1024; // the most common S3 configuration
+	int S3MemSize = 0;
+	vga.vmemsize = S3MemSize;
+	Section_prop *section = static_cast<Section_prop *>(control->GetSection("dosbox"));	
+	S3MemSize = section->Get_int("memsvga3");	
 
-	// Set CRTC 36 to specify amount of VRAM and PCI
-	if (vga.vmemsize < 1024*1024) {
-		vga.vmemsize = 512*1024;
-		vga.s3.reg_36 = 0xfa;		// less than 1mb fast page mode
-	} else if (vga.vmemsize < 2048*1024)	{
-		vga.vmemsize = 1024*1024;
-		vga.s3.reg_36 = 0xda;		// 1mb fast page mode
-	} else if (vga.vmemsize < 3072*1024)	{
-		vga.vmemsize = 2048*1024;
-		vga.s3.reg_36 = 0x9a;		// 2mb fast page mode
-	} else if (vga.vmemsize < 4096*1024)	{
-		vga.vmemsize = 3072*1024;
-		vga.s3.reg_36 = 0x5a;		// 3mb fast page mode
-	} else {	// Trio64 supported only up to 4M
-		vga.vmemsize = 4096*1024;
-		vga.s3.reg_36 = 0x1a;		// 4mb fast page mode
+	
+	if ( S3MemSize == 0){	
+		if (vga.vmemsize == 0)
+			LOG_MSG("S3 Trio Memory Size: Dosbox Default");				
+			//vga.vmemsize = 2*1024*1024; // the most common S3 configuration
+			vga.vmemsize = 2*1024*1024; // the most common S3 configuration
+
+		// Set CRTC 36 to specify amount of VRAM and PCI
+		if (vga.vmemsize < 1024*1024) {
+			vga.vmemsize = 512*1024;		
+			vga.s3.reg_36 = 0xfa;		// less than 1mb fast page mode
+	
+		
+		} else if (vga.vmemsize < 2048*1024)	{
+			vga.vmemsize = 1024*1024;
+			vga.s3.reg_36 = 0xda;		// 1mb fast page mode		
+		
+		} else if (vga.vmemsize < 3072*1024)	{
+			vga.vmemsize = 2048*1024;
+			vga.s3.reg_36 = 0x9a;		// 2mb fast page mode		
+		
+		} else if (vga.vmemsize < 4096*1024)	{
+			vga.vmemsize = 3072*1024;
+			vga.s3.reg_36 = 0x5a;		// 3mb fast page mode		
+		
+		} else {	// Trio64 supported only up to 4M	
+			vga.vmemsize = 4096*1024;
+			vga.s3.reg_36 = 0x1a;		// 4mb fast page mode	
+		}
+	} else {
+		
+			for (int S3MemIndex = 1; S3MemIndex < 32; S3MemIndex++ ){   
+				if ( S3MemIndex == S3MemSize ){
+					 
+					 S3MemSize    = 1024*S3MemSize;	
+					 vga.vmemsize = S3MemSize;		 
+					 
+					 break;
+				}	
+			}			
+			vga.vmemsize = S3MemSize*1024;//4096*1024;
+			vga.s3.reg_36 = 0x1a;		// 4mb fast page mode
+			LOG_MSG("S3 Trio Memory Size: Manual Mode (%dkb)",S3MemSize );	
 	}
-
+	
 	// S3 ROM signature
 	PhysPt rom_base=PhysMake(0xc000,0);
 	phys_writeb(rom_base+0x003f,'S');

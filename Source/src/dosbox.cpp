@@ -446,8 +446,7 @@ void DOSBOX_Init(void) {
 	Pstring = secprop->Add_string("machine",Property::Changeable::OnlyAtStart,"svga_s3");
 	Pstring->Set_values(machines);
 	Pstring->Set_help(  "================================================================================================\n"
-	                    "The type of machine DOSBox tries to emulate.");
-
+	                    "The type of machine DOSBox tries to emulate.");				
 
 	Pstring = secprop->Add_path("captures",Property::Changeable::Always,".\\DATA\\CAPTURE");
 	Pstring->Set_help(  "================================================================================================\n"
@@ -468,6 +467,17 @@ void DOSBOX_Init(void) {
 		                "This value is best left at its default to avoid problems with some games, though few games\n"
 		                "might require a higher value. There is generally no speed advantage when raising this value.");
 		
+
+	Pint = secprop->Add_int("memsvga3", Property::Changeable::WhenIdle,0);	
+	Pint->SetMinMax(0,32);
+	Pint->Set_help(     "================================================================================================\n"
+		                "Amount of memory for the machine SVGA_S3. Possible Values are 0 (Dosbox Default) / 1 >> 32mb\n"
+						"Note: If a Program/ Game or Scene Demo comes with a Message e.q. Not enough Video Memory. You can\n"
+						"force this to use amount Memory. Note: The bigger the memory, the longer the Resolution Index list\n"
+						"Tip: If the screen is Garbage or looks not normal try vgaonly. If the screen flicker use vesa_nolfb\n"
+						"or the tool on Z: named nolfb.com");
+			
+	
 	Pstring = secprop->Add_string("colormode_cga_mono", Property::Changeable::Always,"paperwhite");
 	Pstring->Set_values(cgapalmodes);
 	Pstring->Set_help(  "================================================================================================\n"
@@ -493,6 +503,7 @@ void DOSBOX_Init(void) {
 						  "Warcraft II by Blizzard: ..Set to a value between 8 and 16. This game has a fixed buffer that it\n"
 						  "                           reads the modelist into. DOSBox's normal modelist is too long and the\n"
 			              "                           game will overrun the buffer and crash without this setting.\n"
+						  "Pyl (Software Mode)      ..Set a Value between 24 and 34\n"
 						  "I'm Include a tool from VesaLib Archiv, CHKVESA.COM. You can list the Resolution with this tool");						 
 		
 		
