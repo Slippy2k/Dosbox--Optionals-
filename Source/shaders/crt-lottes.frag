@@ -15,15 +15,15 @@
 // Please take and use, change, or whatever.
 //
 
-const float hardScan = -8.0;
+const float hardScan = -6.0;
 const float hardPix = -3.0;
-const float warpX = 0.031;
-const float warpY = 0.041;
+const float warpX = 0.021;
+const float warpY = 0.045;
 const float maskDark = 0.5;
 const float maskLight = 1.5;
 const float scaleInLinearGamma = 1;
 const float shadowMask = 1;
-const float brightboost = 1;
+const float brightboost = 0.65;
 #define Blackmask 1
 layout (std140) uniform program
 {
@@ -224,11 +224,25 @@ void main()
 	vec3 outColor = Tri(pos);
 #endif
 
+
+	
 	if (shadowMask != 0)
 	{
 		outColor.rgb *= Mask(floor(tex.xy * (IN.texture_size.xy / IN.video_size.xy) * IN.output_size.xy) + vec2(0.5, 0.5));
 	}
 
+		float	x=	mod(gl_FragCoord.y, 2.0);
+
+	if(x> 1.0)	{
+		color = vec4(1.0, 1.0, 1.0, 1.0);
+	}
+	else
+	{
+		color =	vec4(0.0, 0.0, 0.0, 1.0);
+	}
+	
+	color *= vec4(ToSrgb(outColor.rgb), 1.0);
+	
 	color = vec4(ToSrgb(outColor.rgb), 1.0);
 
 }

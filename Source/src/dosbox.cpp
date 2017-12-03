@@ -448,7 +448,7 @@ void DOSBOX_Init(void) {
 	Pstring->Set_help(  "================================================================================================\n"
 	                    "The type of machine DOSBox tries to emulate.");				
 
-	Pstring = secprop->Add_path("captures",Property::Changeable::Always,".\\DATA\\CAPTURE");
+	Pstring = secprop->Add_path("captures",Property::Changeable::Always,".\\CAPTURE");
 	Pstring->Set_help(  "================================================================================================\n"
 	                    "Directory where things like wave, midi, screenshot get captured.");
 
@@ -533,6 +533,11 @@ void DOSBOX_Init(void) {
 					    "texturenb\n"
 					    "Opengl/Openglnb only for shader. For Scanline Filter (scan, tv, rgb) set Aspect to False");
 	Pstring = Pmulti->GetSection()->Add_string("type",Property::Changeable::Always,"none");
+	
+	Pbool = secprop->Add_bool("debug",Property::Changeable::Always,false);
+	Pbool->Set_help(    "================================================================================================\n"
+	                    "Debug Output for Modes, Aspect Ratios und Resoultion Handle. For the Developer");	
+						
 
 	const char *scalers[] = {
 		"none", "normal2x", "normal3x",

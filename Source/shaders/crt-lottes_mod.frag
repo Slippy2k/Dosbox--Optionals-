@@ -15,6 +15,7 @@
 // Please take and use, change, or whatever.
 //
 
+
 #define hardScan -8.0
 #define hardPix -3.0
 #define warpX 0.007 //0.021, 0.007
@@ -23,14 +24,14 @@
 #define maskLight 1.5
 #define scaleInLinearGamma 1
 #define shadowMask 3
-#define brightboost 0.64
+#define brightboost 0.7
 #define hardBloomScan -1.8
 #define hardBloomPix -1.5
 #define bloomAmount 1.0/16.0
-#define shape 3.0 //2.0
-#define Blackmask 1
+#define shape 2.0 //2.0
+#define shadowmaskwight 2.0
 
-#define DO_BLOOM 0
+#define DO_BLOOM 1
 layout (std140) uniform program
 {
 	vec2 video_size;
@@ -98,6 +99,28 @@ vec3 Fetch(vec2 pos,vec2 off,  vec2 texture_size)
 	return ToLinear(brightboost * texture(s0, pos.xy).rgb);
 #endif	
 }
+
+float box(vec2 _st, vec2 _size, float _smoothEdges) {
+	_size = vec2(.1) - _size*.2;
+	vec2 aa = vec2(_smoothEdges * 0.1);
+	vec2 uv = smoothstep(_size, _size+aa, _st);
+	uv *= smoothstep(_size, _size+aa, vec2(1.0)-_st);
+	return uv.x * uv.y;
+}
+
+vec3 drawRectangle(in vec2 st) {
+    // Each result will return 1.0 (white) or 0.0 (
+	vec3 color = vec3(0.0);
+	vec2 borders = step(vec2(0.0),st); 
+    float pct = borders.x * borders.y;
+	
+	// top-right 
+    vec2 tr = step(vec2(0.1),1.0-st);
+    pct *= tr.x * tr.y;
+    // The multiplication of left*bottom will be similar to the logical AND.
+    color = vec3(pct); 
+	return color;
+}	
 
 // Distance in emulated pixels to nearest texel.
 vec2 Dist(vec2 pos, vec2 texture_size)
@@ -313,48 +336,91 @@ vec3 Mask(vec2 pos)
 			mask.b = maskLight;
 		}
 	}
+	
+	if (shadowMask == 5) {
+		float mask_line = maskLight;
+		float odd		= 0.0;
+		if (fract(pos.y/shadowmaskwight) <0.6666666666666667)
+		{
+			odd = 10.0;
+		}
+		
+	
+		if (fract(pos.y/shadowmaskwight) <0.6666666666666667) {
+			mask.r = maskLight;
+			mask.g = maskLight;
+			mask.b = maskLight;
+		} else {
+			mask.r = maskDark;
+			mask.g = maskDark;
+			mask.b = maskDark;
+		}
+	
+		if (fract((pos.y+odd)/shadowmaskwight) <0.6666666666666667)
+		{
+			mask_line += maskDark;  
+		}
+		
+		
+		mask *= mask_line;  
+	} 
+	
+	if (shadowMask == 6) {
+		float mask_line = maskLight;
+		float odd		= 0.0;
+		if (fract(pos.y/2.0) <0.5)
+		{
+			odd = 1.0;
+		}
+		
+		if (fract(pos.y/2.0) <0.5) {
+			mask.r = maskLight;
+			mask.g = maskLight;
+			mask.b = maskLight;
+		} else {
+			mask.r = maskDark;
+			mask.g = maskDark;
+			mask.b = maskDark;
+		}
+	
+		if (fract((pos.y+odd)/2.0) <0.5)
+		{
+			mask_line = maskDark;  
+		}
+		
+			pos.y = fract(pos.x/3.0);
+
+		if(pos.y<0.333)
+		{
+			mask.r+=maskLight;
+		}
+		else if (pos.y<0.666)
+		{
+			mask.g+=maskLight;
+		}
+		else
+		{
+			mask.b+=maskLight;
+		}
+		
+		mask *= mask_line;  
+	} 	
+	
 	return mask;
 }
-uniform vec2 resolution;
-uniform vec2 mouse;
-uniform float time;
-
-float box(vec2 _st, vec2 _size, float _smoothEdges) {
-	_size = vec2(.1) - _size*.2;
-	vec2 aa = vec2(_smoothEdges * 0.1);
-	vec2 uv = smoothstep(_size, _size+aa, _st);
-	uv *= smoothstep(_size, _size+aa, vec2(1.0)-_st);
-	return uv.x * uv.y;
-}
-
-vec3 drawRectangle(in vec2 st) {
-    // Each result will return 1.0 (white) or 0.0 (
-	vec3 color = vec3(0.0);
-	vec2 borders = step(vec2(0.0),st); 
-    float pct = borders.x * borders.y;
-	
-	// top-right 
-    vec2 tr = step(vec2(0.1),1.0-st);
-    pct *= tr.x * tr.y;
-    // The multiplication of left*bottom will be similar to the logical AND.
-    color = vec3(pct); 
-	return color;
-}	
 
 
 void main()
 {
+	
 	vec2 pos = Warp(tex.xy * (IN.texture_size.xy / IN.video_size.xy)) * (IN.video_size.xy / IN.texture_size.xy);
-	vec3 outColor = vec3(1.0);
-#ifdef Blackmask	
-	outColor *= Tri(pos, IN.texture_size.xy);
+	vec3 outColor;
+		
+	outColor += Tri(pos, IN.texture_size.xy);
 	outColor *= drawRectangle(pos);	
-	outColor *= vec3(box(pos, vec2(0.5), 0.01));
-#else
-	vec3 outColor = Tri(pos, IN.texture_size.xy);
-#endif
-
-
+		
+	outColor *= vec3(box(pos, vec2(0.5), 0.01));	
+	
 #ifdef DO_BLOOM
   //Add Bloom
 		outColor.rgb+=Bloom(pos, IN.texture_size.xy)*bloomAmount;
@@ -363,7 +429,7 @@ void main()
 	if (shadowMask != 0)
 	{
 		outColor.rgb *= Mask(floor(tex.xy * (IN.texture_size.xy / IN.video_size.xy) * IN.output_size.xy) + vec2(0.5, 0.5));
-	}
+	}	
 
 	color = vec4(ToSrgb(outColor.rgb), 1.0);
 

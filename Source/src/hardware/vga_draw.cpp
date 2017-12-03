@@ -1132,6 +1132,10 @@ void VGA_ActivateHardwareCursor(void) {
 }
 
 void VGA_SetupDrawing(Bitu /*val*/) {
+	
+	Section_prop *section = static_cast<Section_prop *>(control->GetSection("render"));	
+	bool rDebug = section->Get_bool("debug");
+	
 	if (vga.mode==M_ERROR) {
 		PIC_RemoveEvents(VGA_VerticalTimer);
 		PIC_RemoveEvents(VGA_PanningLatch);
@@ -1398,8 +1402,9 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 	double target_total = (machine==MCH_EGA) ? 262.0 : 449.0;
 	
 	Bitu sync = vga.misc_output >> 6;
-	
+if (rDebug == true){	
 	LOG_MSG("Bitu sync = %d",sync);	
+}
 	switch ( sync ) {
 	case 0:
 		// This is not defined in vga specs,
@@ -1428,10 +1433,11 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 	}
 
 
+
+			
 	double aspect_ratio = pheight / pwidth;
 
-	
-	LOG_MSG("Aspect Ratio = %d",aspect_ratio);
+
 
 	vga.draw.delay.parts = vga.draw.delay.vdend/vga.draw.parts_total;
 	vga.draw.resizing=false;
@@ -1468,6 +1474,14 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 	vga.draw.linear_base = vga.mem.linear;
 	vga.draw.linear_mask = vga.vmemwrap - 1;
 	Bitu pix_per_char = 8;
+
+if (rDebug == true){
+	LOG_MSG("=====================================================================");
+	LOG_MSG("Internal wxh = %dx%d",hdend,vdend);
+	LOG_MSG("Internal bpp = %d",bpp);	
+	LOG_MSG("Aspect Ratio = %d",aspect_ratio);
+	LOG_MSG("=====================================================================\n");		
+}
 	
 	switch (vga.mode) {
 case M_VGA:
@@ -1698,23 +1712,21 @@ case M_VGA:
 	LOG_MSG("v total %2.5f (%3.2fHz) blank(%02.5f/%02.5f) retrace(%02.5f/%02.5f)",	vga.draw.delay.vtotal,(1000.0/vga.draw.delay.vtotal),vga.draw.delay.vblkstart,vga.draw.delay.vblkend,vga.draw.delay.vrstart,vga.draw.delay.vrend);
 #endif
 
-	if (machine == MCH_EGA || svgaCard == SVGA_None){
-		
-		Section_prop *section = static_cast<Section_prop *>(control->GetSection("render"));	
+	if (machine == MCH_EGA || svgaCard == SVGA_None){				
 			bool bAspectRatio = section->Get_bool("aspect");
 			int  dAspectRatio = (int)round(aspect_ratio*100.0f);	
 			
 			if ( bAspectRatio ){	
-#if VGA_DEBUG		
-				LOG_MSG("\n\n\n\n\n\n\n\n\n\n");		
-				LOG_MSG("========================================================");
-				LOG_MSG("== Aspect Ratio is ON");
-				LOG_MSG("== Screen Ratio     = %f",aspect_ratio);
-				LOG_MSG("== Aspect Ratio nr  = %d\n",dAspectRatio);				
-				LOG_MSG("== Screen Width     = %d",width);
-				LOG_MSG("== Screen height    = %d",height);	
-				LOG_MSG("== ht %d vt %d ratio %f", htotal, vtotal, aspect_ratio );	
-#endif				
+				if (rDebug == true){			
+					LOG_MSG("\n\n\n\n\n\n\n\n\n\n");		
+					LOG_MSG("=====================================================================");
+					LOG_MSG("== Aspect Ratio is ON");
+					LOG_MSG("== Screen Ratio     = %f",aspect_ratio);
+					LOG_MSG("== Aspect Ratio nr  = %d\n",dAspectRatio);				
+					LOG_MSG("== Screen Width     = %d",width);
+					LOG_MSG("== Screen height    = %d",height);	
+					LOG_MSG("== ht %d vt %d ratio %f", htotal, vtotal, aspect_ratio );	
+				}			
 				/* =======================================================================================EGA======*/	
 				if ( vga.mode == M_EGA  && machine == MCH_EGA && dAspectRatio == 80 ){
 					aspect_ratio =1.372;			
@@ -1773,35 +1785,35 @@ case M_VGA:
 					aspect_ratio =1.0;					
 					// eq Scene Demo Monolith
 				}					
-#if VGA_DEBUG									
-				switch (vga.mode) {
-					case M_VGA:  		LOG_MSG("== VGA Modus     =  M_VGA (%d)",vga.mode); 		break;							
-					case M_EGA:  		LOG_MSG("== VGA Modus     =  M_EGA (%d)",vga.mode);			break;	
-					case M_LIN4: 		LOG_MSG("== VGA Modus     =  M_LIN4 (%d)",vga.mode);		break;						
-					case M_LIN8: 		LOG_MSG("== VGA Modus     =  M_LIN8 (%d)",vga.mode);		break;	
-					case M_LIN15:		LOG_MSG("== VGA Modus     =  M_LIN15 (%d)",vga.mode);		break;							
-					case M_LIN16:		LOG_MSG("== VGA Modus     =  M_LIN16 (%d)",vga.mode);		break;							
-					case M_LIN32:		LOG_MSG("== VGA Modus     =  M_LIN32 (%d)",vga.mode);		break;													
-					case M_CGA2:		LOG_MSG("== VGA Modus     =  M_CGA2 (%d)",vga.mode);		break;							
-					case M_CGA4:		LOG_MSG("== VGA Modus     =  M_CGA4 (%d)",vga.mode);		break;							
-					case M_CGA16:		LOG_MSG("== VGA Modus     =  M_CGA16 (%d)",vga.mode);		break;							
-					case M_HERC_GFX:	LOG_MSG("== VGA Modus     =  M_HERC_GFX (%d)",vga.mode);	break;							
-					case M_TANDY2:		LOG_MSG("== VGA Modus     =  M_TANDY2 (%d)",vga.mode);		break;							
-					case M_TANDY4:		LOG_MSG("== VGA Modus     =  M_TANDY4 (%d)",vga.mode);		break;							
-					case M_TANDY16:		LOG_MSG("== VGA Modus     =  M_TANDY16 (%d)",vga.mode);		break;							
-					case M_TEXT:		LOG_MSG("== VGA Modus     =  M_TEXT (%d)",vga.mode);		break;							
-					case M_TANDY_TEXT:	LOG_MSG("== VGA Modus     =  M_TANDY_TEXT (%d)",vga.mode);	break;							
-					case M_HERC_TEXT: 	LOG_MSG("== VGA Modus     =  M_HERC_TEXT (%d)",vga.mode);	break;							
-					default: 			LOG_MSG("== VGA Modus     =  Unbekannt   (%d)",vga.mode);	break;												
-				}
-				if  (svgaCard == SVGA_None && (machine != MCH_EGA) ){
-					LOG_MSG("== Maschine      =  VGAONLY (SVGA_None)");
-				}
-				if  (svgaCard != SVGA_None && (machine == MCH_EGA) ){
-					LOG_MSG("== Maschine      =  ega (MCH_EGA)");	
+				if (rDebug == true){								
+					switch (vga.mode) {
+						case M_VGA:  		LOG_MSG("== VGA Modus     =  M_VGA (%d)",vga.mode); 		break;							
+						case M_EGA:  		LOG_MSG("== VGA Modus     =  M_EGA (%d)",vga.mode);			break;	
+						case M_LIN4: 		LOG_MSG("== VGA Modus     =  M_LIN4 (%d)",vga.mode);		break;						
+						case M_LIN8: 		LOG_MSG("== VGA Modus     =  M_LIN8 (%d)",vga.mode);		break;	
+						case M_LIN15:		LOG_MSG("== VGA Modus     =  M_LIN15 (%d)",vga.mode);		break;							
+						case M_LIN16:		LOG_MSG("== VGA Modus     =  M_LIN16 (%d)",vga.mode);		break;							
+						case M_LIN32:		LOG_MSG("== VGA Modus     =  M_LIN32 (%d)",vga.mode);		break;													
+						case M_CGA2:		LOG_MSG("== VGA Modus     =  M_CGA2 (%d)",vga.mode);		break;							
+						case M_CGA4:		LOG_MSG("== VGA Modus     =  M_CGA4 (%d)",vga.mode);		break;							
+						case M_CGA16:		LOG_MSG("== VGA Modus     =  M_CGA16 (%d)",vga.mode);		break;							
+						case M_HERC_GFX:	LOG_MSG("== VGA Modus     =  M_HERC_GFX (%d)",vga.mode);	break;							
+						case M_TANDY2:		LOG_MSG("== VGA Modus     =  M_TANDY2 (%d)",vga.mode);		break;							
+						case M_TANDY4:		LOG_MSG("== VGA Modus     =  M_TANDY4 (%d)",vga.mode);		break;							
+						case M_TANDY16:		LOG_MSG("== VGA Modus     =  M_TANDY16 (%d)",vga.mode);		break;							
+						case M_TEXT:		LOG_MSG("== VGA Modus     =  M_TEXT (%d)",vga.mode);		break;							
+						case M_TANDY_TEXT:	LOG_MSG("== VGA Modus     =  M_TANDY_TEXT (%d)",vga.mode);	break;							
+						case M_HERC_TEXT: 	LOG_MSG("== VGA Modus     =  M_HERC_TEXT (%d)",vga.mode);	break;							
+						default: 			LOG_MSG("== VGA Modus     =  Unbekannt   (%d)",vga.mode);	break;												
+					}
+					if  (svgaCard == SVGA_None && (machine != MCH_EGA) ){
+						LOG_MSG("== Maschine      =  VGAONLY (SVGA_None)");
+					}
+					if  (svgaCard != SVGA_None && (machine == MCH_EGA) ){
+						LOG_MSG("== Maschine      =  ega (MCH_EGA)");	
+					}				
+					LOG_MSG("=====================================================================");			
 				}				
-				LOG_MSG("========================================================");				
-#endif				
 			}
 	}	
 	// need to resize the output window?
@@ -1827,18 +1839,18 @@ case M_VGA:
 		LOG(LOG_VGA,LOG_NORMAL)("%s width, %s height aspect %f",
 			doublewidth ? "double":"normal",doubleheight ? "double":"normal",aspect_ratio);
 #endif
-#if VGA_DEBUG	
-		if (machine == MCH_EGA || svgaCard == SVGA_None){		
-			LOG_MSG("Result\n");	
-			LOG_MSG("========================================================");
-			LOG_MSG("== Screen Ratio   = %d",aspect_ratio);
-			LOG_MSG("== Aspect Ratio nr= %d\n",(int)(aspect_ratio*100.0));			
-			LOG_MSG("== Screen Width  = %d",width);
-			LOG_MSG("== Screen height = %d",height);	
-			LOG_MSG("=== ht %d vt %d ratio %f", htotal, vtotal, aspect_ratio );	
-			LOG_MSG("========================================================");	
-		}
-#endif		
+		if (rDebug == true){
+			if (machine == MCH_EGA || svgaCard == SVGA_None){		
+				LOG_MSG("Result\n");	
+				LOG_MSG("=====================================================================");
+				LOG_MSG("== Screen Ratio   = %d",aspect_ratio);
+				LOG_MSG("== Aspect Ratio nr= %d\n",(int)(aspect_ratio*100.0));			
+				LOG_MSG("== Screen Width  = %d",width);
+				LOG_MSG("== Screen height = %d",height);	
+				LOG_MSG("== ht %d vt %d ratio %f", htotal, vtotal, aspect_ratio );	
+				LOG_MSG("=====================================================================");	
+			}
+		}	
 		if (!vga.draw.vga_override) 
 			RENDER_SetSize(width, height, bpp, (float)fps, aspect_ratio,
 			doublewidth, doubleheight);

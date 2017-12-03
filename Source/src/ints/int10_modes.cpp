@@ -24,6 +24,8 @@
 #include "inout.h"
 #include "int10.h"
 #include "vga.h"
+#include "control.h"
+#include "..\gui\version.h"
 
 #define _EGA_HALF_CLOCK		0x0001
 #define _EGA_LINE_DOUBLE	0x0002
@@ -33,6 +35,7 @@
 #define GFX_REGS 0x09
 #define ATT_REGS 0x15
 
+//#define MODES_DEBUG 1
 VideoModeBlock ModeList_VGA[]={
 /* mode  ,type     ,sw  ,sh  ,tw ,th ,cw,ch ,pt,pstart  ,plength,htot,vtot,hde,vde special flags */
 { 0x000  ,M_TEXT   ,360 ,400 ,40 ,25 ,9 ,16 ,8 ,0xB8000 ,0x0800 ,50  ,449 ,40 ,400 ,_EGA_HALF_CLOCK	},
@@ -54,6 +57,9 @@ VideoModeBlock ModeList_VGA[]={
 
 { 0x054  ,M_TEXT   ,1056,344, 132,43, 8,  8, 1 ,0xB8000 ,0x4000, 160, 449, 132,344, 0   },
 { 0x055  ,M_TEXT   ,1056,400, 132,25, 8, 16, 1 ,0xB8000 ,0x2000, 160, 449, 132,400, 0   },
+
+/*The Big Red Adventure search mode 0x68, 'commandline was -24 (S3 Chip) 104 (0x68)' alias of mode 100*/
+{ 0x068  ,M_LIN8   ,640 ,400 ,80 ,25 ,8 ,16 ,1 ,0xA0000 ,0x10000,100 ,449 ,80 ,400 ,0   },
 
 /* Alias of mode 101 */
 { 0x069  ,M_LIN8   ,640 ,480 ,80 ,30 ,8 ,16 ,1 ,0xA0000 ,0x10000,100 ,525 ,80 ,480 ,0	},
@@ -99,8 +105,8 @@ VideoModeBlock ModeList_VGA[]={
 { 0x118  ,M_LIN32  ,1024,768 ,128,48 ,8 ,16 ,1 ,0xA0000 ,0x10000,168 ,806 ,128,768 ,0	},
 
 /* those should be interlaced but ok */
-//{ 0x119  ,M_LIN15  ,1280,1024,160,64 ,8 ,16 ,1 ,0xA0000 ,0x10000,424 ,1066,320,1024,0	},
-//{ 0x11A  ,M_LIN16  ,1280,1024,160,64 ,8 ,16 ,1 ,0xA0000 ,0x10000,424 ,1066,320,1024,0	},
+{ 0x119  ,M_LIN15  ,1280,1024,160,64 ,8 ,16 ,1 ,0xA0000 ,0x10000,424 ,1066,320,1024,0	},
+{ 0x11A  ,M_LIN16  ,1280,1024,160,64 ,8 ,16 ,1 ,0xA0000 ,0x10000,424 ,1066,320,1024,0	},
 
 { 0x150  ,M_LIN8   ,320 ,200 ,40 ,25 ,8 ,8  ,1 ,0xA0000 ,0x10000,100 ,449 ,80 ,400 , _VGA_PIXEL_DOUBLE | _EGA_LINE_DOUBLE },
 { 0x151  ,M_LIN8   ,320 ,240 ,40 ,30 ,8 ,8  ,1 ,0xA0000 ,0x10000,100 ,525 ,80 ,480 , _VGA_PIXEL_DOUBLE | _EGA_LINE_DOUBLE },
@@ -456,16 +462,34 @@ VideoModeBlock * CurMode;
 
 static bool SetCurMode(VideoModeBlock modeblock[],Bit16u mode) {
 	Bitu i=0;
+	Section_prop *section = static_cast<Section_prop *>(control->GetSection("render"));	
+	bool rDebug = section->Get_bool("debug");
+	if (rDebug == true){	
+		LOG_MSG("\n=====================================================================\n");
+		LOG_MSG("Game/ Programm search for Mode: %#04x",mode);
+	}	
+	
 	while (modeblock[i].mode!=0xffff) {
+	if (rDebug == true){	
+		LOG_MSG("Mode %#04x = %#04x \t(%2d/ %2d) \t[ Width: %d x Height: %d ]",mode, modeblock[i].mode,i,modeblock[i].mode,modeblock[i].swidth, modeblock[i].sheight);
+	}
 		if (modeblock[i].mode!=mode) i++;
 		else {
 			if ((!int10.vesa_oldvbe) || (ModeList_VGA[i].mode<0x120)) {
 				CurMode=&modeblock[i];
+				if (rDebug == true){			
+					LOG_MSG("Founded... ");				
+					LOG_MSG("=====================================================================\n");
+				}
 				return true;
 			}
+				LOG_MSG("INT10 MODES: Enumeration mode( %#04x ) not found in blocklist\n" __FILE__ ":%d", mode, __LINE__);				
+				LOG_MSG("=====================================================================\n");			
 			return false;
 		}
 	}
+	LOG_MSG("INT10 MODES: Enumeration mode( %#04x ) not found in blocklist\n" __FILE__ ":%d", mode, __LINE__);				
+	LOG_MSG("=====================================================================\n");	
 	return false;
 }
 

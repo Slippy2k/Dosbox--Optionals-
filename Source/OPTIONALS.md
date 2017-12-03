@@ -1,4 +1,4 @@
-DOSBox SVN r4063 (Optionals) Build on (Nov 18 2017 02:40:08)
+DOSBox SVN r4064 (Optionals) Build on (Dec  3 2017 18:22:28)
 
 
 Features Compiled: 32Bit DynamicX68 FpuCoreX68 OpenGL3 3DFX CGA-Extension 
@@ -7,7 +7,7 @@ Features Compiled: 32Bit DynamicX68 FpuCoreX68 OpenGL3 3DFX CGA-Extension
 				   
 
 Features: In and i have done
-- Added** Updates from 4006 to 4063 manual
+- Added** Updates from 4006 to 4064 manual
 - static (Single Exe)
 - SDL2 2.0.4
 - SDL2 Net
@@ -50,14 +50,150 @@ Various:
 	- Commandline -version changed (add version.h/version.cpp)
 
 	
-Optionals Fixes
+Optionals Version: Fixes/ Changes / Additional
 	- Windows Taskbar height was on Non Fullscreen not calculated.
 	- Fullscreen/Non Fullscreen Mouse Input
 	- Fixed 3DFX Voodoo, Crash with Output Method OpenGl3
 	- Fixed 3DFX Voodoo, Crash Texture Renderer Surface/Direct3d/Auto
 	  ("Auto", On Windows -> SDL take Direct3D first)
-	  
+	- CGA Mono and Hercules Color can be set in the conf as default color
 	
+20.11	
+	- stdout and stderr are dosbox_log, dosbox_err. If exists a sub 
+           directory 'DATA'. save to the sub directory	
+	  
+25.11
+    	- OpenGL3 Output Method, On 16 or 32Bit it jumps to Surface Method
+	  Jump Label excluded. On Windows the shader works (Screen Test Windows 3.1)
+	- OpenGl3 Output, VGAOnly/EGA Ratio Mismatch/Melt, Screen Height Doubled Fixed
+	
+27.11
+	- Quick Fix for VGAonly and Aspect Ratio (Thanks to Diduz @ Vogons Forum)
+30.11 
+	- Rework Aspect Ratio Fix. This fixes Sleepwalker and Jazz Rabbit in vgaonly
+	  additional Monolith Diffrent Screen Resolution Fixed. (Thanks to Diduz @ Vogons Forum)
+32.11
+	- Fixed Aspect Ration on EGA & VGAOnly. This fixed Resolution problems with Sleewalker
+	  and Jazz Jack Rabbit.
+	- VGA Multisync. Double Screen Resolution normalized (Scene Demo Monolith)
+	- Update crt_lottes( & _mod). Added a Black mask for the Warp x and y. On my System
+	  the Top and Left border was a glitch.
+	- Added for svga_s3 a Mameory Option in the conf 'memsvga3'. A few Games or Scene Demos
+	  brings a Message with 'not enough memory video'. You can Force them.
+	- Added programs on Drive Z: (S3REFRESH, NOLFB.COM (to use with svga_s3), CHKVESA.COM)
+        - Added programs on Drive Z: (Box, a echo command with a box) (This was only a test)!
+        - Added programs on Drive Z: NOVERT.COM. This is eq. for 3D Shooter. This disabled the
+          Forward Mode with the Vertical Mouse Movement.
+        - Added Few Fixes from Dosbox-X. Eq. for Scene Demos.
+        - Added in the conf 'CutVesaResolutionIndex'. You can cap the Resolution Index. This
+          Fixed eg. Warcraft2
+        - Reworked the generated Dosbox.conf. It is now Reader friendly.
+
+
+03.12
+	- Added and Update Dosbox Optionals to svn r4064
+	  Allow for direct changing of 4op chaining without having to rewrite the algorithm mode.
+
+	- Added a Missing Resolution Index 0x68, If you set in 'The Big Red Adventure' S3 Chip
+	  Set and it founded. It saved in the bat the commandline '-24 (For S3) and the
+	  Resolution Index 104'. this is Index 0x68. On Gamestart it fails because not founded.
+    
+	- Added from Freedos Project The memory Manager Programm 'JEMMEX'. I've searched the
+	  Internet for the Tool. Now its permanent in Dosbox. I hate this 'searchen'
+	
+
+=======================================================================================================
+	
+	Adding and take a other few Fixes from Dosbox-X (Credits go to the DOSBox-X author(s))
+	/* I have this taken and only adjusted for my DOSBox Source */
+	 - VESA BIOS modelist a bit to place 320x200x256 at 0x153. 
+			 Realtech's "Countdown" demo will crash if mode 0x153 is not 320x200x256
+			 if you run it with S3 acceleration.
+
+	- 	INT 10h bugfix: Before returning from INT 10h, make sure the VGA
+
+			Attribute Controller is reset to the index state, not left in data
+			state. Some demos (KUKOO2) call INT 10h and assume the AC is in the
+			index phase.
+
+			This also fixes jumpy scrolling emulation bug for KUKOO2.EXE. Video init
+			code in KUKOO2.EXE does not read 3DAh to reset latch, and assumes that
+			it can select register 10h, read from 3C1h, and write it back after
+			having set bit 5 (0x20) in order to do it's panning effect at top while
+			leaving the scrolling text+checkerboard stable at the bottom.
+			 
+	-  S3 Trio XGA bugfix: The XGA Bresenham line drawing routine sign-extended
+
+			the parameters in a way that was perfectly fine for 32-bit builds, but
+			causes the XGA emulation to hang on 64-bit builds. 13-bit sign extension
+			has been corrected for both 32-bit and 64-bit builds. This fixes two
+			known scenarios where the incorrect sign extension caused hangs: 1)
+			Windows 95 with S3 emulation and an application that draws lines on the
+			screen (the Mystify screen saver is a good test case) and 2) RealTech's
+			1995 demo "Countdown" when S3 acceleration is enabled (at the wireframe
+			hourglass part of the demo).
+			
+	- INT 10 VESA BIOS: new option added. If set, the VESA BIOS modelist is
+			capped at the specified number of entries. You can use this option to
+			cap the modelist for DOS applications that have problems with the long
+			modelist DOSBox-X normally returns in enumeration. Specifically, setting
+			this option to cap the modelist at 8-16 options fixes a problem with
+			Warcraft II crashing with the DOS4/GW extender. For whatever reason,
+			DOSBox-X's normal modelist overruns a buffer somewhere in the game (but
+			only with DOS4/GW?) and the game will crash on startup.		 
+		
+    - Added More Resolution to INt10
+	
+	-  VGA sequencer emulation fix: when DOS programs write the sequencer index
+
+			register (port 0x3C4) most VGA/SVGA cards actually decode fewer bits
+			than the 8-bit value given. This can be seen through casual poking or
+			from the Hackipedia VGA register dumps I've posted online, where
+			Sequencer registers will repeat through indexes 0-255 depending on how
+			many bits are decoded by the hardware. Currently it is known that ET4000
+			cards decode only the lowest 3 bits, Trident TVGA cards decode the lowest
+			4 bits, and S3 cards decode the lowest 6 bits. This behavior means that
+			"aliases" of common Sequencer registers exist that function exactly the
+			same as the normal registers.
+
+			The reason for this fix, is the 1993 demo "Spiral" by Dataction, which
+			has a flawed Mode X implementation. It sets up VGA 256-color Mode X as
+			normal, but instead of writing directly to the Map Mask Register
+			(Sequencer index 0x02) it writes to an alias of the Map Mask Register
+			(Sequencer index 0x12) that exists on older VGA hardware (standard VGA,
+			ET4000, Trident) but not on newer VGA hardware (S3). This is why, when
+			the demo is run on newer hardware, the Mode X graphics don't render
+			properly. Adding the sequencer masking behavior allows the demo to
+			render Mode X properly with machine=svga_et4000 and the graphics no
+			longer look like a low resolution blurry mess.
+	
+	  - S3 bugfix: INT 10h now uses I/O writes to clear & remove the hardware
+
+			cursor. It uses I/O, not direct changes to VGA state, so that it works
+			properly within Windows 95 I/O virtualization. This fixes the garbled
+			cursor that would otherwise appear if a DOS game goes fullscreen and
+			uses the VESA BIOS to switch into 640x480x256 or higher res SVGA modes.
+			At the same time, allowing Windows 95 to virtualize I/O means bringing
+			up a DOS box in a window will not kill the hardware cursor.
+			Bugfix for GitHub issue #148: "Documentation: Windows 95 dos box and
+			vesa mode with hardware mouse".
+			
+	  - S3 Trio emulation bugfix: On S3 cards, the "compatible VGA" vs "Extended
+
+			SVGA" memory mapping is controlled by bit 3 in CRTC register 0x31. INT
+			10h emulation already writes the bit via I/O, but manually set the
+			"compatible chain 4" enable flag farther up. The problem with setting it
+			manually is that the generic "S3" driver in Windows 95 (using bank
+			switching and legacy VGA memory 0xA0000-0xAFFFF) expects to trap and
+			virtualize that bit through I/O, which it can't when DOSBox just sets it
+			internally like that. Prior to the fix, opening a DOS box in Windows 95
+			would trigger "compatible chain 4" emulation which would then cause any
+			non-accelerated graphics drawn after that point to come out garbled,
+			until you forced a video mode reset by entering and leaving fullscreen
+			mode in the DOS Box. As a reminder, Windows 95 calls INT 10h AX=0x0003
+			(set 80x25 alphanumeric text mode) when opening a DOS box and it does
+			so in a virtualized sense so that INT 10h affects the DOS virtual
+			machine, not the actual Windows 95 desktop.
 	
 Features: Out
 - GFX: Direct Draw

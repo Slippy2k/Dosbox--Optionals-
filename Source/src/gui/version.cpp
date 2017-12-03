@@ -17,7 +17,7 @@
  */
 #include <stdio.h>
 #include "..\..\config.h"
-#include "version.h"
+#include "version.h" 
 
 /*
  * Version string and build date string. These can be used by anything that

@@ -901,6 +901,10 @@ GLfloat get_texture_y(GLfloat vertex_y, GLfloat video_y, GLfloat texture_y) {
 #endif
 
 Bitu GFX_SetSize(Bitu width,Bitu height,Bitu flags,double scalex,double scaley,GFX_CallBack_t callback) {
+	
+	Section_prop *section = static_cast<Section_prop *>(control->GetSection("render"));	
+	bool rDebug = section->Get_bool("debug");
+	
 	if (sdl.updating)
 		GFX_EndUpdate( 0 );
 
@@ -1028,19 +1032,29 @@ dosurface:
 	case SCREEN_OPENGL:
 	{
 		if (flags & GFX_CAN_8){
+			if (rDebug == true){
 			LOG_MSG("SDL: OpenGL, Using 8Bit");
+			}
 		}
 		if (flags & GFX_CAN_15){
+			if (rDebug == true){			
 			LOG_MSG("SDL: OpenGL, Using 15Bit");
+			}
 		}		
 		if (flags & GFX_CAN_16){
+			if (rDebug == true){			
 			LOG_MSG("SDL: OpenGL, Using 16Bit");
+			}
 		}		
 		if (flags & GFX_CAN_32){
+			if (rDebug == true){			
 			LOG_MSG("SDL: OpenGL, Using 32Bit");			
+			}
 		}		
 		if (flags & GFX_RGBONLY){
+			if (rDebug == true){		
 			LOG_MSG("SDL: OpenGL, Using RGB Only");
+			}
 		}		
 		
 		if (!(flags & GFX_CAN_32) || (flags & GFX_RGBONLY)) {
@@ -1186,8 +1200,9 @@ dosurface:
 
 		// Time to take advantage of the shader now
 		glUseProgram(sdl.opengl.program_object);
-
-		LOG_MSG("SDL: Game resolution: %dx%d", width, height);
+		if (rDebug == true){
+			LOG_MSG("SDL: Game resolution: %dx%d", width, height);
+		}
 
 		float uniform_block[6];
 		uniform_block[0] = width;
