@@ -140,6 +140,10 @@ Optionals Version: Fixes/ Changes / Additional
     - Windows Keys (Win Left and Right added to SDL Mapper)
 	- Reboot Message changed
 	- Doshell Dir switch. More help to the Sort Order Command
+	- Added in the conf [SDL] UseAspectHeight. If this true. Dosbox will be use Aspect Ratio
+	  on the Screens (Aspect=true/false). if this set to false. Aspect Ratio has no 'heavy' effect
+	  the screen hight's. I added this because my Resolution 1280x1024 was always shrink to 1820x960.
+	  OK, this 640x480 *2. But it doesn't look good on Windows 3.x/ Windows 95.
 	=======================================================================================================
 	
 	Adding and take a other few Fixes from Dosbox-X (Credits go to the DOSBox-X author(s))
