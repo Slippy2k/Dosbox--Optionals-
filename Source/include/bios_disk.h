@@ -65,8 +65,11 @@ public:
 
 	Bit32u sector_size;
 	Bit32u heads,cylinders,sectors;
+	/* DOSBox-MB IMGMAKE patch. ========================================================================= */
+	Bit64u current_fpos;
+	/* DOSBox-MB IMGMAKE patch. ========================================================================= */	
 private:
-	Bit32u current_fpos;
+	
 	enum { NONE,READ,WRITE } last_action;
 };
 

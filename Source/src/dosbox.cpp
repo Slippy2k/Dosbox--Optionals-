@@ -136,6 +136,8 @@ bool mono_cga=false;
 
 bool CPU_FastForward = false;
 
+const char* GFX_Type="Not Specified";
+
 extern void GFX_SetTitle(Bit32s cycles,Bits frameskip,bool paused);
 
 static Bitu Normal_Loop(void) {
@@ -401,7 +403,17 @@ static void DOSBOX_RealInit(Section * sec) {
 	else if (mtype == "svga_paradise") { svgaCard = SVGA_ParadisePVGA1A; }
 	else if (mtype == "vgaonly")      { svgaCard = SVGA_None; }
 	else E_Exit("DOSBOX:Unknown machine type %s",mtype.c_str());
-}
+	
+		static char name[14];	
+		name[13] = 0;
+		if (!strlen(name)) strcpy(name,mtype.c_str());
+		for(Bitu i = 0;i < 12;i++) { //Don't put garbage in the title bar. Mac OS X doesn't like it
+			if (name[i] == 0) break;
+			if ( !isprint(*reinterpret_cast<unsigned char*>(&name[i])) ) name[i] = '?';
+		}
+		GFX_Type = name;
+	GFX_SetTitle(-1,-1,false);
+	}
 
 
 void DOSBOX_Init(void) {
@@ -1062,6 +1074,17 @@ void DOSBOX_Init(void) {
 	Pbool->Set_help(        "================================================================================================\n"
 	                        "Enable button wrapping at the number of emulated buttons.");
 
+
+	Pbool = secprop->Add_bool("circularinput",Property::Changeable::WhenIdle,false);
+	Pbool->Set_help(        "================================================================================================\n"
+							"enable translation of circular input to square output.\n"
+							"Try enabling this if your left analog stick can only move in a circle.");
+
+	Pint = secprop->Add_int("deadzone",Property::Changeable::WhenIdle,10);
+	Pint->SetMinMax(0,100);
+	Pint->Set_help(        "================================================================================================\n"
+	                       "the percentage of motion to ignore. 100 turns the stick into a digital one.");
+							
 	secprop=control->AddSection_prop("serial",&SERIAL_Init,true);
 	const char* serials[] = { "dummy", "disabled", "modem", "nullmodem",
 	                          "directserial",0 };
@@ -1146,19 +1169,46 @@ void DOSBOX_Init(void) {
 	secline=control->AddSection_line("autoexec",&AUTOEXEC_Init);
 	MSG_Add("AUTOEXEC_CONFIGFILE_HELP",
 		"Lines in this section will be run at startup. You can put your MOUNT lines here.\n"
-		"#================================================================================================\n"
-		"@ECHO OFF\n"
-		"@MOUNT C \".\\HDD-C\" freesize 2400\n"
-		"@MOUNT D \".\\HDD-D\" freesize 1000\n\n"		
-		"@REM IMGMOUNT E \"GAME.CUE\" -t cdrom\n"
-		"@SET PATH=Z:\\;C:\\;C:\\DOS\n"
-		"@REM SET BLASTER=A220 I7 D1 H5 P330 T6\n"
-		"@REM SET MIDI=SYNTH:1 MAP:E\n\n"
-		"@REM EXAMPLE FOR MULTIPLES FLOPPYS IN ONE DRIVE\n"
-		"@REM IMGMOUNT A \"Disk1.ima\" \"Disk1.ima\" \"Disk1.ima\" \"Disk1.ima\"\n\n"
-		"@REM EXAMPLE FOR IMAGEMOUNT HDD\n"
-		"@REM http:////www.dosbox.com//wiki//IMGMOUNT\n"
-		"#================================================================================================\n"
+		"================================================================================================\n"
+		"ECHO OFF\n"
+		"======================================================================\n"
+        "-- Example: Image Mount Options HD (The Simplest Way)\n"
+		"MOUNT    C \".\\HDD-C\" freesize 250\n"
+		"MOUNT    D \".\\HDD-D\" freesize 250\n\n"
+        "-- Example: Image Mount Options HD (As Image variant): (Using 250MB Harddrive)\n"
+		"SET HD_DIR=.\\HDD_IMAGE\n"
+		"SET HDIMG1=MS-DOS 5.00.img\n"
+		"SET HDIMG2=MS-DOS 6.22.img\n"
+		"IMGMOUNT 2 \"%HD_DIR%\\%HDIMG1%\" -size 512,63,16,507 -fs none\n\n"
+		"======================================================================\n"
+        "-- Example: Image Mount Options CD:\n"
+        "SET CD_DIR=.\\HDD_CDROM\n"
+		"SET CDROM1=GAME1.CUE\n"
+		"SET CDROM2=GAME2.CUE\n\n"
+        "-- Example: As Directory or Image (Iso, Bin, Cue)\n"
+		"MOUNT    E \"%CD_DIR%\" -t cdrom\n"
+		"IMGMOUNT E \"%CD_DIR%\\%CDROM1%\" -t cdrom\n\n"
+		"======================================================================\n"
+        "-- Example: Image Mount Options Floppy:\n"
+        "SET DSKDIR=.\\HDD_FLOPPYS\n"
+		"SET DISK01=%DSKDIR%\\DISK1.IMA\n"
+		"SET DISK02=%DSKDIR%\\DISK2.IMA\n"
+		"SET DISK03=%DSKDIR%\\DISK3.IMA\n"
+		"SET DISK04=%DSKDIR%\\DISK4.IMA\n"
+		"SET DISK05=%DSKDIR%\\DISK5.IMA\n"
+		"SET DISK06=%DSKDIR%\\DISK6.IMA\n\n"
+        "-- Example: Image, Boot, Multi (Multiples Floppy in One Drive) (img, ima)\n"
+		"IMGMOUNT A \"%DISK01%\" \"%DISK02%\" \"%DISK03%\" \"%DISK04%\" \"%DISK05%\" \"%DISK06%\" -t floppy\n"
+		"BOOT       \"%DISK01%\" \"%DISK02%\" \"%DISK03%\" \"%DISK04%\" \"%DISK05%\" \"%DISK06%\" -l A\n\n"
+		"REM More Mount Examples: http:////www.dosbox.com//wiki//IMGMOUNT\n\n"
+		"======================================================================\n"
+        "-- Default Autoexec Bat:\n"
+		"SET PATH=Z:\\;C:\\;C:\\DOS;C:\\WINDOWS\n"
+		"SET BLASTER=A220 I7 D1 H5 P330 T6\n"
+		"SET MIDI=SYNTH:1 MAP:E\n\n"
+		"======================================================================\n"
+		"MOUSECAP\n"
+		"================================================================================================\n"
 	);
 	MSG_Add("CONFIGFILE_INTRO",	
 	        "# This is the configuration file for DOSBox %s. Lines starting with a # are comment lines and\n"

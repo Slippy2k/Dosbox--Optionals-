@@ -82,8 +82,10 @@ struct SDL_Block {
 	Uint32 sdl_WindowFlags;
 	Uint32 sdl_FullS_Flags;
 	Uint32 ScrOpenGL_Flags;
+	bool OpenGLDesktopFullScreen;
 	SDL_PixelFormat *pixelFormat;	
 	bool fullscreen;
+	bool full_fixed;
 	struct {
 		bool fullscreen_desktop;		
 		int wTBH;
@@ -97,6 +99,7 @@ struct SDL_Block {
 	int posY;
 	int posX_Old;
 	int posY_Old;	
+	int windowstaskbaradjust;
 	struct {
 		const char* output;
 		const char* texture;
@@ -400,6 +403,13 @@ UINT32 calculate_palsum(UINT32 tmunum) {
 	return csum;
 }
 
+static int int_log2 (int val) {
+    int log = 0;
+    while ((val >>= 1) != 0)
+	log++;
+    return log;
+}
+
 void ogl_cache_texture(const poly_extra_data *extra, ogl_texture_data *td) {
 	voodoo_state *v=(voodoo_state*)extra->state;
 	UINT32 texbase;
@@ -444,7 +454,7 @@ void ogl_cache_texture(const poly_extra_data *extra, ogl_texture_data *td) {
 						texID = u->second;
 					} else {
 						valid_texid = false;
-//						LOG_MSG("texture removed... size %d",t->second.ids->size());
+						//LOG_MSG("texture removed... size %d",t->second.ids->size());
 						if (t->second.ids->size() > 8) {
 							std::map<const UINT32, GLuint>::iterator u;
 							for (u=t->second.ids->begin(); u!=t->second.ids->end(); u++) {
@@ -472,7 +482,9 @@ void ogl_cache_texture(const poly_extra_data *extra, ogl_texture_data *td) {
 				}
 
 				if (TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u) < 8) {
+					//LOG_MSG("TEXMODE_FORMAT");
 					if (TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u) != 5) {
+						//LOG_MSG("TEXMODE_FORMAT 1");
 						for (int i=0; i<(smax*tmax); i++) {
 							UINT8 *texptr8 = (UINT8 *)&v->tmu[j].ram[(texboffset) & v->tmu[j].mask];
 							UINT32 data = v->tmu[j].lookup[*texptr8];
@@ -481,7 +493,9 @@ void ogl_cache_texture(const poly_extra_data *extra, ogl_texture_data *td) {
 							texrgbp++;
 						}
 					} else {
+							//LOG_MSG("TEXMODE_FORMAT 2");						
 						for (int i=0; i<(smax*tmax); i++) {
+
 							UINT8 *texptr8 = (UINT8 *)&v->tmu[j].ram[(texboffset) & v->tmu[j].mask];
 							UINT8 texel = *texptr8;
 							UINT32 data = v->tmu[j].lookup[texel];
@@ -491,6 +505,7 @@ void ogl_cache_texture(const poly_extra_data *extra, ogl_texture_data *td) {
 						}
 					}
 				} else if (TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u) >= 10 && TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u) <= 12) {
+						//LOG_MSG("TEXMODE_FORMAT 3");					
 					for (int i=0; i<(smax*tmax); i++) {
 						UINT16 *texptr16 = (UINT16 *)&v->tmu[j].ram[(texboffset) & v->tmu[j].mask];
 						UINT32 data = v->tmu[j].lookup[*texptr16];
@@ -499,6 +514,7 @@ void ogl_cache_texture(const poly_extra_data *extra, ogl_texture_data *td) {
 						texrgbp++;
 					}
 				} else if (TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u) != 14) {
+					//LOG_MSG("TEXMODE_FORMAT 4");
 					for (int i=0; i<(smax*tmax); i++) {
 						UINT16 *texptr16 = (UINT16 *)&v->tmu[j].ram[(texboffset) & v->tmu[j].mask];
 						UINT32 data = (v->tmu[j].lookup[*texptr16 & 0xFF] & 0xFFFFFF) | ((*texptr16 & 0xff00) << 16);
@@ -507,7 +523,9 @@ void ogl_cache_texture(const poly_extra_data *extra, ogl_texture_data *td) {
 						texrgbp++;
 					}
 				} else {
+						//LOG_MSG("TEXMODE_FORMAT 5");					
 					for (int i=0; i<(smax*tmax); i++) {
+
 						UINT16 *texptr16 = (UINT16 *)&v->tmu[j].ram[(texboffset) & v->tmu[j].mask];
 						UINT16 texel1 = *texptr16 & 0xFF;
 						UINT32 data = (v->tmu[j].lookup[texel1] & 0xFFFFFF) | ((*texptr16 & 0xff00) << 16);
@@ -518,15 +536,21 @@ void ogl_cache_texture(const poly_extra_data *extra, ogl_texture_data *td) {
 				}
 
 				texrgbp = (UINT32 *)&texrgb[0];
-//				LOG_MSG("texid %d format %d -- %d x %d",
-//					texID,TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u),smax,tmax);
+				//LOG_MSG("texid %d format %d -- %d x %d",texID,TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u),smax,tmax);
 
-				glBindTexture(GL_TEXTURE_2D, texID);
+				glBindTexture(GL_TEXTURE_2D, texID);			
 				glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
 				glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
 				glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,TEXMODE_CLAMP_S(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);
 				glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,TEXMODE_CLAMP_T(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);
+			
+				
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, smax, tmax, 0, GL_BGRA_EXT, GL_UNSIGNED_INT_8_8_8_8_REV, texrgbp);
+				
+				//int texsize=2 << int_log2(sdl.pciW > sdl.pciW ? sdl.pciW : sdl.pciW);
+				//sdl.opengl.framebuf=calloc(1, texsize*texsize*4);		//32 bit color				
+				//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, texsize, texsize, 0, GL_BGRA, GL_UNSIGNED_BYTE, sdl.opengl.framebuf);
+				
 				extern PFNGLGENERATEMIPMAPEXTPROC glGenerateMipmapEXT;
 				glGenerateMipmapEXT(GL_TEXTURE_2D);
 				UINT32 palsum=0;
@@ -1634,6 +1658,113 @@ void voodoo_ogl_vblank_flush(void) {
 	glFlush();
 }
 
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+void vPCI_SDL_SetWindowMode(void){
+		RECT r; sdl.desktop.wTBH = 0;
+		SystemParametersInfo(SPI_GETWORKAREA, 0, &r, 0);
+
+		SDL_DisplayMode displayMode;
+		
+		SDL_GetDesktopDisplayMode(sdl.desktop.Index, &displayMode);		
+
+		SDL_SetWindowSize(sdl.surface, sdl.pciW, sdl.pciH);
+		
+		/*==========================================================================*/
+		if ( sdl.pciW < displayMode.w && sdl.pciH < displayMode.h ){	
+			sdl.desktop.wTBH = 0;			
+			if (sdl.desktop.Index == 0)	{
+				if (displayMode.h != r.bottom){
+					sdl.desktop.wTBH = sdl.windowstaskbaradjust; 
+				}				
+				sdl.desktop.wTBH += (displayMode.h - r.bottom )/2;
+				
+			}			
+			sdl.posX         = (displayMode.w - sdl.pciW) /2;
+			sdl.posY         = ((displayMode.h - sdl.desktop.wTBH) - sdl.pciH) /2;
+			// LOG_MSG("VOODOO: Mode: 01: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
+					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);
+			return;
+		}
+		/*==========================================================================*/		
+		if ( sdl.pciW > displayMode.w && sdl.pciH > displayMode.h ){							
+			sdl.posX         = (displayMode.w - sdl.pciW) /2;
+			sdl.posY         = (displayMode.h - sdl.pciH) /2;
+			// LOG_MSG("VOODOO: Mode: 02: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
+					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);	
+			return;
+		}
+		/*==========================================================================*/
+		if ( sdl.pciW < displayMode.w && sdl.pciH > displayMode.h ){							
+			sdl.posX         = (displayMode.w - sdl.pciW) /2;
+			sdl.posY         = (displayMode.h - sdl.pciH) /2;
+			// LOG_MSG("VOODOO: Mode: 03: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
+					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);			
+			return;
+		}	
+		/*==========================================================================*/
+		if ( sdl.pciW > displayMode.w &&  sdl.pciH < displayMode.h ){	
+			sdl.desktop.wTBH = 0;		
+			if (sdl.desktop.Index  == 0)	{		
+				if (displayMode.h != r.bottom){
+					sdl.desktop.wTBH = sdl.windowstaskbaradjust; 
+				}				
+				sdl.desktop.wTBH += (displayMode.h - r.bottom )/2;	
+			}
+			sdl.posX         = (displayMode.w - sdl.pciW) /2;
+			sdl.posY         = ((displayMode.h - sdl.desktop.wTBH) - sdl.pciH) /2;
+			// LOG_MSG("VOODOO: Mode: 04: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
+					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);			
+			return;
+		}			
+		/*==========================================================================*/
+		if ( sdl.pciW == displayMode.w &&  sdl.pciH == displayMode.h ){	
+			sdl.posX         = (displayMode.w - sdl.pciW) /2;
+			sdl.posY         = (displayMode.h - sdl.pciH) /2;
+			// LOG_MSG("VOODOO: Mode: 05: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
+					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);		
+			return;
+		}	
+		/*==========================================================================*/
+		if ( sdl.pciW == displayMode.w &&  sdl.pciH > displayMode.h ){	
+			sdl.posX         = (displayMode.w - sdl.pciW) /2;
+			sdl.posY         = (displayMode.h - sdl.pciH) /2;
+			// LOG_MSG("VOODOO: Mode: 06: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
+					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);		
+			return;
+		}	
+		/*==========================================================================*/
+		if ( sdl.pciW == displayMode.w &&  sdl.pciH < displayMode.h ){	
+			sdl.desktop.wTBH = 0;			
+			if (sdl.desktop.Index  == 0)	{		
+				if (displayMode.h != r.bottom){
+					sdl.desktop.wTBH = sdl.windowstaskbaradjust; 
+				}				
+				sdl.desktop.wTBH += (displayMode.h - r.bottom )/2;	
+			}
+			sdl.posX         = (displayMode.w - sdl.pciW) /2;
+			sdl.posY         = ((displayMode.h - sdl.desktop.wTBH) - sdl.pciH) /2;
+			// LOG_MSG("VOODOO: Mode: 07: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
+					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);			
+			return;
+		}			
+		/*==========================================================================*/
+		if ( sdl.pciW > displayMode.w &&  sdl.pciH == displayMode.h ){	
+			sdl.posX         = (displayMode.w - sdl.pciW) /2;
+			sdl.posY         = (displayMode.h - sdl.pciH) /2;
+			// LOG_MSG("VOODOO: Mode: 08: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
+					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);		
+			return;
+		}
+		/*==========================================================================*/
+		if ( sdl.pciW > displayMode.w &&  sdl.pciH == displayMode.h ){	
+			sdl.posX         = (displayMode.w - sdl.pciW) /2;
+			sdl.posY         = (displayMode.h - sdl.pciH) /2;
+			// LOG_MSG("VOODOO: Mode: 09: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
+					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);			
+			return;
+		}		
+	
+}
 
 void voodoo_ogl_set_window(voodoo_state *v) {
 	
@@ -1699,6 +1830,7 @@ void voodoo_ogl_set_window(voodoo_state *v) {
 			last_orientation = FBZMODE_Y_ORIGIN(v->reg[fbzMode].u);
 	}
 	if (size_changed) {	
+		
 		if (sdl.fullscreen){
 			// if ( v->fbi.height < sdl.pciFSH && sdl.fullscreen){					
 				// adjust_y=(sdl.pciFSH-v->fbi.height)/2;
@@ -1709,27 +1841,31 @@ void voodoo_ogl_set_window(voodoo_state *v) {
 			// LOG_MSG("VOODOO FULLSCREEN: adjust_x %d",adjust_x);
 			// LOG_MSG("VOODOO FULLSCREEN: adjust_y %d",adjust_y);
 			// LOG_MSG("VOODOO FULLSCREEN: dl.pciFSW %d",sdl.pciFSW);
-			// LOG_MSG("VOODOO FULLSCREEN: dl.pciFSH %d",sdl.pciFSH);
+			if (sdl.ScrOpenGL_Flags & SDL_WINDOW_FULLSCREEN_DESKTOP){
+				SDL_DisplayMode displayMode;
+				SDL_GetDesktopDisplayMode(0, &displayMode);					
+				adjust_x = (displayMode.w - sdl.pciFSW) /2;
+				adjust_y = (displayMode.h - sdl.pciFSH) /2;			
+			}			
+			LOG_MSG("VOODOO FULLSCREEN: dl.pciFSH %d",sdl.pciFSH);
+			
 			glViewport( adjust_x, adjust_y, sdl.pciFSW, sdl.pciFSH );				
+			
 		}else{			
+			LOG_MSG("VOODOO WINDOW");
+			vPCI_SDL_SetWindowMode();
+			adjust_x = sdl.posX;
+			adjust_x = sdl.posY;
 			glViewport( adjust_x, adjust_y, sdl.pciW, sdl.pciH );	
 		}
 		
-									
+		glClearColor (0.0, 0.0, 0.0, 1.0);
+		glShadeModel (GL_FLAT);
 
 		//sdl.pciW = v->fbi.width;
 		//sdl.pciH = v->fbi.height;
 	}
 }
-
-static int int_log2 (int val) {
-    int log = 0;
-    while ((val >>= 1) != 0)
-	log++;
-    return log;
-}
-
-
 
 void vPCI_SDL_Free_VSurface(void)
 {
@@ -1745,21 +1881,48 @@ void vPCI_SDL_Free_VSurface(void)
 	sdl.surface = NULL;
 	}
 }
+
+
+
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void vPCI_Get_Configuration(void){
 	
 	Section_prop *section = static_cast<Section_prop *>(control->GetSection("pci"));
+	Section_prop *sectsdl = static_cast<Section_prop *>(control->GetSection("sdl"));	
 
-	sdl.opengl.sfiltering=section->Get_string("voodoofiltering");
+	const char* sOpenGLOutput;
+	const char* vresolution;
 	
-	const char* sOpenGLOutput=section->Get_string("voodoo");	
-	const char* vresolution=section->Get_string("voodoo_Window");
+	bool UseOwnWindowResolution = false;
+	bool UseOwnFullScResolution = false;
+		 sdl.full_fixed 		= false;
+		
+	UseOwnWindowResolution = sectsdl->Get_bool("VoodooUseOwnWindowRes");
+	UseOwnFullScResolution = sectsdl->Get_bool("VoodooUseOwnFullScRes");	
+	
+	sdl.opengl.sfiltering=section->Get_string("voodoofiltering");
+	sOpenGLOutput=section->Get_string("voodoo");
+
+	// Voodoo Use the same Resolution Output how Dosbox
+	if (!UseOwnWindowResolution){
+		vresolution=sectsdl->Get_string("windowresolution");	
+	}else {
+		vresolution=section->Get_string("voodoo_Window");
+	}
+
 	
 	if(vresolution && *vresolution) {
 		char res[100];
 		safe_strncpy( res,vresolution, sizeof( res ));
 		vresolution = lowcase (res);//so x and X are allowed
-		if(strcmp(vresolution,"original")) {
+		if(strcmp(vresolution,"original") == 0) {
+				sdl.pciW = 640;				
+				sdl.pciH = 480;
+		}else if (strcmp(vresolution,"desktop") == 0 || strcmp(vresolution,"0x0") == 0) { //desktop = 0x0
+				sdl.pciW = 1280;				
+				sdl.pciH = 960;		
+		}else {
+			
 			char* height = const_cast<char*>(strchr(vresolution,'x'));
 			if(height && *height) {
 				*height = 0;
@@ -1770,21 +1933,35 @@ void vPCI_Get_Configuration(void){
 	}	
 	
 	vresolution="";
-	vresolution=section->Get_string("voodoo_Fullscreen");
+	// Voodoo Use the same Resolution Output how Dosbox	
+	if (!UseOwnFullScResolution){
+		vresolution=sectsdl->Get_string("fullresolution");	
+	}else {
+		vresolution=section->Get_string("voodoo_Fullscreen");
+	}
 	
+	sdl.pciFSH = 0;
+	sdl.pciFSW = 0;	
 	if(vresolution && *vresolution) {
 		char res[100];
 		safe_strncpy( res,vresolution, sizeof( res ));
 		vresolution = lowcase (res);//so x and X are allowed
-		if(strcmp(vresolution,"original")) {
-			char* height = const_cast<char*>(strchr(vresolution,'x'));
-			if(height && *height) {
-				*height = 0;
-				sdl.pciFSH = (Bit16u)atoi(height+1);
-				sdl.pciFSW = (Bit16u)atoi(res);
-			}
+		if (strcmp(vresolution,"original") == 0) {
+				sdl.pciFSW = 640;
+				sdl.pciFSH = 480;
+		}else if (strcmp(vresolution,"desktop") == 0 || strcmp(vresolution,"0x0") == 0) { //desktop = 0x0
+				sdl.full_fixed = true;
+				sdl.pciFSW = 1280;				
+				sdl.pciFSH = 960;	
+		}else{
+				char* height = const_cast<char*>(strchr(vresolution,'x'));
+				if(height && *height) {
+					*height = 0;
+					sdl.pciFSH = (Bit16u)atoi(height+1);
+					sdl.pciFSW = (Bit16u)atoi(res);
+				}
 		}
-	}	
+	}
 	
 	if (!strcasecmp(sdl.opengl.sfiltering,"default"))
 	{
@@ -1799,13 +1976,16 @@ void vPCI_Get_Configuration(void){
 		sdl.opengl.GL_filtering=2;
 	}
 	
-	sdl.opengl.compatibleFlag=section->Get_bool("compatible_flag");	
-	Section_prop *sectsdl = static_cast<Section_prop *>(control->GetSection("sdl"));	
-	sdl.dosbox.output  =  sectsdl->Get_string("output");
-	sdl.dosbox.texture =  sectsdl->Get_string("texture.renderer");	
+	sdl.opengl.compatibleFlag	=  section->Get_bool("compatible_flag");	
+	sdl.OpenGLDesktopFullScreen =  sectsdl->Get_bool("VoodooDesktopFullScrn");		
+	sdl.windowstaskbaradjust 	=  sectsdl->Get_int("WindowsTaskbarAdjust");	
+	sdl.dosbox.output  			=  sectsdl->Get_string("output");
+	sdl.dosbox.texture 			=  sectsdl->Get_string("texture.renderer");		
+
 
 }
 
+	
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void vPCI_Reset_GLVideoMode(void){
 	last_clear_color=0;
@@ -1883,12 +2063,12 @@ void vPCI_SDL_SetVideoFlags(void) {
 	
 	#if !SDL_VERSION_ATLEAST(2, 0, 0)
 		sdl.sdl_WindowFlags = SDL_OPENGL;
-		sdl.sdl_FullS_Flags = SDL_OPENGL|SDL_FULLSCREEN;
+		sdl.sdl_FullS_Flags = SDL_OPENGL;
 	#else
 		sdl.sdl_WindowFlags = SDL_WINDOW_OPENGL|SDL_WINDOW_INPUT_GRABBED|SDL_WINDOW_INPUT_FOCUS|SDL_WINDOW_MOUSE_FOCUS|SDL_WINDOW_MOUSE_CAPTURE|SDL_WINDOW_SHOWN;
 		sdl.sdl_FullS_Flags = SDL_WINDOW_OPENGL|SDL_WINDOW_INPUT_GRABBED;		
 		
-		if (!sdl.desktop.fullscreen_desktop){
+		if (!sdl.OpenGLDesktopFullScreen){
 			sdl.sdl_FullS_Flags |= SDL_WINDOW_FULLSCREEN;
 		} else {
 			sdl.sdl_FullS_Flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
@@ -1920,104 +2100,8 @@ void vPCI_SDL_SetSDLContext(void){
 		// LOG_MSG("VOODOOD: SDL_GL_SwapWindow Finished");		
 	#endif		
 }
-/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-void vPCI_SDL_SetWindowMode(void){
-		RECT r; sdl.desktop.wTBH = 0;
-		SystemParametersInfo(SPI_GETWORKAREA, 0, &r, 0);
 
-		SDL_DisplayMode displayMode;
-		
-		SDL_GetDesktopDisplayMode(sdl.desktop.Index, &displayMode);		
 
-		SDL_SetWindowSize(sdl.surface, sdl.pciW, sdl.pciH);
-		
-		/*==========================================================================*/
-		if ( sdl.pciW < displayMode.w && sdl.pciH < displayMode.h ){	
-			sdl.desktop.wTBH = 0;
-			if (sdl.desktop.Index = 0)	{
-				sdl.desktop.wTBH = (displayMode.h - r.bottom )/2;
-				
-			}			
-			sdl.posX         = (displayMode.w - sdl.pciW) /2;
-			sdl.posY         = ((displayMode.h - sdl.desktop.wTBH) - sdl.pciH) /2;
-			// LOG_MSG("VOODOO: Mode: 01: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
-					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);
-			return;
-		}
-		/*==========================================================================*/		
-		if ( sdl.pciW > displayMode.w && sdl.pciH > displayMode.h ){							
-			sdl.posX         = (displayMode.w - sdl.pciW) /2;
-			sdl.posY         = (displayMode.h - sdl.pciH) /2;
-			// LOG_MSG("VOODOO: Mode: 02: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
-					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);	
-			return;
-		}
-		/*==========================================================================*/
-		if ( sdl.pciW < displayMode.w && sdl.pciH > displayMode.h ){							
-			sdl.posX         = (displayMode.w - sdl.pciW) /2;
-			sdl.posY         = (displayMode.h - sdl.pciH) /2;
-			// LOG_MSG("VOODOO: Mode: 03: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
-					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);			
-			return;
-		}	
-		/*==========================================================================*/
-		if ( sdl.pciW > displayMode.w &&  sdl.pciH < displayMode.h ){	
-			sdl.desktop.wTBH = 0;
-			if (sdl.desktop.Index  = 0)	{		
-				sdl.desktop.wTBH = (displayMode.h - r.bottom )/2;	
-			}
-			sdl.posX         = (displayMode.w - sdl.pciW) /2;
-			sdl.posY         = ((displayMode.h - sdl.desktop.wTBH) - sdl.pciH) /2;
-			// LOG_MSG("VOODOO: Mode: 04: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
-					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);			
-			return;
-		}			
-		/*==========================================================================*/
-		if ( sdl.pciW == displayMode.w &&  sdl.pciH == displayMode.h ){	
-			sdl.posX         = (displayMode.w - sdl.pciW) /2;
-			sdl.posY         = (displayMode.h - sdl.pciH) /2;
-			// LOG_MSG("VOODOO: Mode: 05: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
-					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);		
-			return;
-		}	
-		/*==========================================================================*/
-		if ( sdl.pciW == displayMode.w &&  sdl.pciH > displayMode.h ){	
-			sdl.posX         = (displayMode.w - sdl.pciW) /2;
-			sdl.posY         = (displayMode.h - sdl.pciH) /2;
-			// LOG_MSG("VOODOO: Mode: 06: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
-					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);		
-			return;
-		}	
-		/*==========================================================================*/
-		if ( sdl.pciW == displayMode.w &&  sdl.pciH < displayMode.h ){	
-			sdl.desktop.wTBH = 0;
-			if (sdl.desktop.Index  = 0)	{		
-				sdl.desktop.wTBH = (displayMode.h - r.bottom )/2;	
-			}
-			sdl.posX         = (displayMode.w - sdl.pciW) /2;
-			sdl.posY         = ((displayMode.h - sdl.desktop.wTBH) - sdl.pciH) /2;
-			// LOG_MSG("VOODOO: Mode: 07: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
-					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);			
-			return;
-		}			
-		/*==========================================================================*/
-		if ( sdl.pciW > displayMode.w &&  sdl.pciH == displayMode.h ){	
-			sdl.posX         = (displayMode.w - sdl.pciW) /2;
-			sdl.posY         = (displayMode.h - sdl.pciH) /2;
-			// LOG_MSG("VOODOO: Mode: 08: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
-					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);		
-			return;
-		}
-		/*==========================================================================*/
-		if ( sdl.pciW > displayMode.w &&  sdl.pciH == displayMode.h ){	
-			sdl.posX         = (displayMode.w - sdl.pciW) /2;
-			sdl.posY         = (displayMode.h - sdl.pciH) /2;
-			// LOG_MSG("VOODOO: Mode: 09: Tb:%d WinX:%d WinY:%d DesW:%d DeskH:%d",
-					// sdl.desktop.wTBH,sdl.posX,sdl.posY,displayMode.w,displayMode.h);			
-			return;
-		}		
-	
-}
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void vPCI_SDL_Init_OpenGLCX(void) {
 
@@ -2046,11 +2130,16 @@ void vPCI_SDL_Init_OpenGLCX(void) {
 		sdl.desktop.Index = SDL_GetWindowDisplayIndex(sdl.surface);						
 		//LOG_MSG("%d,%d",numMonitors,numCurrent);
 
+		
+		
 		vPCI_SDL_SetWindowMode();
 	
 		SDL_SetWindowPosition(sdl.surface,sdl.posX, sdl.posY);	
 		vPCI_SDL_SetSDLContext();
-		//SDL_RaiseWindow(sdl.surface);		
+		//SDL_RaiseWindow(sdl.surface);	
+
+
+		
 	}
 
 	if (sdl.fullscreen) {
@@ -2067,30 +2156,31 @@ void vPCI_SDL_Init_OpenGLCX(void) {
 	}
 
 	if (sdl.fullscreen) {
-		GFX_ResetScreen();
+
 		sdl.surface = sdl.Dosbox_Surface; bool success = false;
 		
-			const int mode_count= SDL_GetNumDisplayModes( 0 );
-			for( int m= 0; m < mode_count; m++ )
-			{
-				SDL_DisplayMode mode;
-				const int result= SDL_GetDisplayMode( 0, m, &mode );
-				if( result < 0 )
-					continue;
-				if( !( SDL_BITSPERPIXEL( mode.format ) == 24 || SDL_BITSPERPIXEL( mode.format ) == 32 ) )
-					continue;
-
-				if( mode.w == int(sdl.pciFSW) && mode.h == int(sdl.pciFSH) && mode.refresh_rate == int(60) )
+			//if (!sdl.OpenGLDesktopFullScreen){
+				const int mode_count= SDL_GetNumDisplayModes( 0 );
+				for( int m= 0; m < mode_count; m++ )
 				{
-					const int result= SDL_SetWindowDisplayMode( sdl.surface, &mode );
-					// LOG_MSG("VOODOO: SDL_SetWindowDisplayMode %d,%d: Result = %d",mode.w,mode.h,result);
-					if( result == 0 )
-						success = true;
-						SDL_SetWindowFullscreen(sdl.surface,sdl.ScrOpenGL_Flags);
-					break;
-				}
-			}
+					SDL_DisplayMode mode;
+					const int result= SDL_GetDisplayMode( 0, m, &mode );
+					if( result < 0 )
+						continue;
+					if( !( SDL_BITSPERPIXEL( mode.format ) == 24 || SDL_BITSPERPIXEL( mode.format ) == 32 ) )
+						continue;
 
+					if( mode.w == int(sdl.pciFSW) && mode.h == int(sdl.pciFSH) && mode.refresh_rate == int(60) )
+					{
+						const int result= SDL_SetWindowDisplayMode( sdl.surface, &mode );
+						// LOG_MSG("VOODOO: SDL_SetWindowDisplayMode %d,%d: Result = %d",mode.w,mode.h,result);
+						if( result == 0 )
+							success = true;
+							SDL_SetWindowFullscreen(sdl.surface,sdl.ScrOpenGL_Flags);
+						break;
+					}
+				}
+			//}
 			if	(!success)	{				
 				SDL_DisplayMode mode;
 				mode.w            = sdl.pciFSW;
@@ -2106,7 +2196,8 @@ void vPCI_SDL_Init_OpenGLCX(void) {
 	const bool shouldGrab = (sdl.ScrOpenGL_Flags & SDL_WINDOW_INPUT_GRABBED);	
 	SDL_SetWindowGrab(sdl.surface, shouldGrab ? SDL_TRUE : SDL_FALSE);		
 	
-	GFX_SwitchLazyFullscreen(true); GFX_UpdateSDLCaptureState();		
+	GFX_SwitchLazyFullscreen(true);
+	GFX_UpdateSDLCaptureState();		
 	int value;
 
 	bool few_colors = false;
@@ -2224,6 +2315,10 @@ bool voodoo_ogl_init(voodoo_state *v) {
 	vPCI_Get_Configuration();
 	// GET DOSBOX SCREEN
 	#if SDL_VERSION_ATLEAST(2, 0, 0)
+	
+		if (!sdl.OpenGLDesktopFullScreen){
+			GFX_ResetScreen();
+		}		
 		vPCI_check_OpenGLIII();				
 		vPCI_get_DosboxVideo();
 		vPCI_force_to_OpenGL();
@@ -2272,6 +2367,7 @@ bool voodoo_ogl_init(voodoo_state *v) {
 	}
 
 	LOG_MSG("VOODOO: Current GL_VERSION = %s\n", glGetString(GL_VERSION));
+
 	glMatrixMode( GL_PROJECTION );
 	voodoo_ogl_set_window(v);
 

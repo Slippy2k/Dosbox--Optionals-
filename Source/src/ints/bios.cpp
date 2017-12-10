@@ -984,7 +984,8 @@ static Bitu Default_IRQ_Handler(void) {
 
 static Bitu Reboot_Handler(void) {
 	// switch to text mode, notify user (let's hope INT10 still works)
-	const char* const text = "\n\n   Reboot requested, quitting now.";
+	const char* const text = "\n\n\n\n\n            Reboot Requested\n\n\n"
+	                                                   "             Shutdown System. Please Restart Dosbox";
 	reg_ax = 0;
 	CALLBACK_RunRealInt(0x10);
 	reg_ah = 0xe;

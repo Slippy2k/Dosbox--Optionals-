@@ -348,7 +348,7 @@ void KEYBOARD_AddKey(KBD_KEYS keytype,bool pressed) {
 	case KBD_down:extend=true;ret=80;break;
 	case KBD_pagedown:extend=true;ret=81;break;
 	case KBD_insert:extend=true;ret=82;break;
-	case KBD_delete:extend=true;ret=83;break;
+	case KBD_delete:extend=true;ret=83;break;	
 	case KBD_pause:
 		KEYBOARD_AddBuffer(0xe1);
 		KEYBOARD_AddBuffer(29|(pressed?0:0x80));
@@ -360,6 +360,9 @@ void KEYBOARD_AddKey(KBD_KEYS keytype,bool pressed) {
 		KEYBOARD_AddBuffer(0xe0);
 		KEYBOARD_AddBuffer(55|(pressed?0:0x80));
 		return;
+	case KBD_lwindows:extend=true;ret=0x1f;break;
+	case KBD_rwindows:extend=true;ret=0x27;break;
+	//case KBD_rwinmenu:extend=true;ret=0x2f;break;		
 	default:
 		E_Exit("Unsupported key press");
 		break;

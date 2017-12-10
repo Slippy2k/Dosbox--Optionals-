@@ -595,7 +595,13 @@ void DOS_Shell::CMD_DIR(char * args) {
 	if (ScanCMDBool(args,"O-S")) {
 		optOS = true;
 		reverseSort = true;
-	}	
+	}else if (ScanCMDBool(args,"O")) {
+		WriteOut("Sort order need a argument more (/ON /OD /OE /OS /O-N /O-D /O-E /O-S)");
+		return;
+	}else if (ScanCMDBool(args,"-")) {
+		WriteOut("Reverse Sort Help: (/O-N /O-D /O-E /O-S)");
+		return;
+	}		
 	char * rem=ScanCMDRemain(args);
 	if (rem) {
 		WriteOut(MSG_Get("SHELL_ILLEGAL_SWITCH"),rem);

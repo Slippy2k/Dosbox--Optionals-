@@ -20,11 +20,11 @@
  *
  */
 
-#define DOSBOXREVISION "r4064 (Optionals)"
-#define DOSBOXSVERSION "r4064"
+#define DOSBOXREVISION "r4066 (Optionals)"
+#define DOSBOXSVERSION "r4066"
 
 #define DOSBOXFEATSGFX "3DFX CGA-Extension "
-#define DOSBOXFEATSSND "MT32 SSI2001 M.A.M.E.-Sound Nuked-OPL3 "
+#define DOSBOXFEATSSND "MT32 SSI2001 M.A.M.E.-Sound Nuked-OPL3"
 
 extern const char *gDosboxDay;
 extern const char *gDosboxMonth;

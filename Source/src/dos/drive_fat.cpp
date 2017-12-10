@@ -639,11 +639,14 @@ fatDrive::fatDrive(const char *sysFilename, Bit32u bytesector, Bit32u cylsector,
 		imgDTAPtr = RealMake(imgDTASeg, 0);
 		imgDTA    = new DOS_DTA(imgDTAPtr);
 	}
-
-	diskfile = fopen(sysFilename, "rb+");
+/* DOSBox-MB IMGMAKE patch. ========================================================================= */
+	diskfile = fopen64(sysFilename, "rb+");
+/* DOSBox-MB IMGMAKE patch. ========================================================================= */	
 	if(!diskfile) {created_successfully = false;return;}
-	fseek(diskfile, 0L, SEEK_END);
-	filesize = (Bit32u)ftell(diskfile) / 1024L;
+/* DOSBox-MB IMGMAKE patch. ========================================================================= */	
+	fseeko64(diskfile, 0L, SEEK_END);
+	filesize = (Bit32u)(ftello64(diskfile) / 1024L);
+/* DOSBox-MB IMGMAKE patch. ========================================================================= */
 
 	/* Load disk image */
 	loadedDisk = new(std::nothrow) imageDisk(diskfile, (Bit8u *)sysFilename, filesize, (filesize > 2880));
@@ -729,8 +732,12 @@ fatDrive::fatDrive(const char *sysFilename, Bit32u bytesector, Bit32u cylsector,
 	}
 
 	if(!bootbuffer.sectorsperfat) {
+/* DOSBox-MB IMGMAKE patch. ========================================================================= */		
 		/* FAT32 not implemented yet */
-		created_successfully = false;
+		//created_successfully = false;
+		LOG_MSG("FAT type not supported, mounting image only");
+		fattype = FAT32;	// Avoid parsing dir entries, see fatDrive::FindFirst()...should work for unformatted images as well
+/* DOSBox-MB IMGMAKE patch. ========================================================================= */		
 		return;
 	}
 
@@ -903,6 +910,9 @@ bool fatDrive::FileUnlink(char * name) {
 
 bool fatDrive::FindFirst(char *_dir, DOS_DTA &dta,bool /*fcb_findfirst*/) {
 	direntry dummyClust;
+/* DOSBox-MB IMGMAKE patch. ========================================================================= */	
+	if(fattype==FAT32) return false;
+/* DOSBox-MB IMGMAKE patch. ========================================================================= */	
 #if 0
 	Bit8u attr;char pattern[DOS_NAMELENGTH_ASCII];
 	dta.GetSearchParams(attr,pattern);

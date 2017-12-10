@@ -20,6 +20,7 @@
 #ifndef DOSBOX_VIDEO_H
 #define DOSBOX_VIDEO_H
 
+
 #define REDUCE_JOYSTICK_POLLING
 
 typedef enum {

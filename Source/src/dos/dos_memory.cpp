@@ -32,7 +32,9 @@ static void DOS_CompressMemory(void) {
 
 	while (mcb.GetType()!=0x5a) {
 		mcb_next.SetPt((Bit16u)(mcb_segment+mcb.GetSize()+1));
-		if (GCC_UNLIKELY((mcb_next.GetType()!=0x4d) && (mcb_next.GetType()!=0x5a))) E_Exit("Corrupt MCB chain");
+		if ( GCC_UNLIKELY((mcb_next.GetType()!=0x4d) && (mcb_next.GetType()!=0x5a)) ){
+				E_Exit("Corrupt MCB chain");
+		}
 		if ((mcb.GetPSPSeg()==MCB_FREE) && (mcb_next.GetPSPSeg()==MCB_FREE)) {
 			mcb.SetSize(mcb.GetSize()+mcb_next.GetSize()+1);
 			mcb.SetType(mcb_next.GetType());

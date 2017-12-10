@@ -1,4 +1,4 @@
-DOSBox SVN r4064 (Optionals) Build on (Dec  3 2017 18:22:28)
+DOSBox SVN r4066 (Optionals v10) Build on (Dec 10 2017 18:41:05)
 
 
 Features Compiled: 32Bit DynamicX68 FpuCoreX68 OpenGL3 3DFX CGA-Extension 
@@ -95,14 +95,52 @@ Optionals Version: Fixes/ Changes / Additional
 	  Allow for direct changing of 4op chaining without having to rewrite the algorithm mode.
 
 	- Added a Missing Resolution Index 0x68, If you set in 'The Big Red Adventure' S3 Chip
-	  Set and it founded. It saved in the bat the commandline '-24 (For S3) and the
+	  and it founded. It saved in the bat the commandline '-24 (For S3) and the
 	  Resolution Index 104'. this is Index 0x68. On Gamestart it fails because not founded.
     
 	- Added from Freedos Project The memory Manager Programm 'JEMMEX'. I've searched the
 	  Internet for the Tool. Now its permanent in Dosbox. I hate this 'searchen'
+	  
+06.12
+	- Added and Update Dosbox Optionals to svn r4065
+	  Fix bug where joysticks got disabled after a section restart (when changing parameters while running).
+		Add code to map circularly restricted analogue input to be mapped to squares.
+		Add deadzone support in both square and circular mode.
+		Add deadzone=100 as fake digital device (idea by Hidden Asbestos)	
+		
+	- Added GETDIG.COM Program (Similar Choice but only with Digits Only)
+    - Added Maschinentype/GFX Card to the Window Title
 	
-
-=======================================================================================================
+10.12
+    - Added in the conf [SDL]. 'VoodooUseOwnFullScRes' and 'VoodooUseOwnWindowRes'.
+	  On true the Voodoo 3DFX resolution is taken from the configuration settings windowresolution/
+	  fullresolution. Set to false so you can change in the section	pci a own Resolution or if you
+	  run with a game in problems and higher Resolution you can change this and use the Original Resolution.
+	 
+    - Added in the conf [SDL] 'VoodooDesktopFullScrn'. With this bool is controlled whether the
+	  3DFX Fullscreen 'native' is or as 'Fullscreen Desktop' traded (SDL2). For 3DFX games that have no
+	  problem with it (High Resolutions), such as Tomb Raider, Fatal Racing aka Screamer, D1 Enemy Zero
+	  (Windows 95 with Voodoo driver) is recommended to set the value to true. For games like Pyl,
+	  Blood etc .. put the value on false.
+	
+	- Added in the conf [SDL] WindowsTaskbarAdjust. With the switch you can adjust the fine tuning for
+	  the centering of the window in the height if the window 'still' hangs a few pixels under the
+	  Windows taskbar.
+	
+	- Update to SVN Code 4066
+	  Allow an autoinit transfer to go over into a single cycle transfer. Fixes Paddlers.
+	  
+	- Added imgmake Patch. From HAL's Old Megabuild Version. Create HD images.
+	- Dosbox Window Title show the Maschine/GFXCard.
+	- Reworked the Template for the Autoexec
+	- HD Nibblefix from Dobsox-X
+	  NTS: DOSBox 0.74 mainline has these backwards: the upper nibble is the first hard disk,
+		   the lower nibble is the second hard disk. It makes a big difference to stupid OS's like
+		   Windows 95.   
+    - Windows Keys (Win Left and Right added to SDL Mapper)
+	- Reboot Message changed
+	- Doshell Dir switch. More help to the Sort Order Command
+	=======================================================================================================
 	
 	Adding and take a other few Fixes from Dosbox-X (Credits go to the DOSBox-X author(s))
 	/* I have this taken and only adjusted for my DOSBox Source */
@@ -199,6 +237,22 @@ Features: Out
 - GFX: Direct Draw
 - GFX: Overlay
 
+	  
+NOTE: Fullscreen issues and todos.   
+	I think you have already noticed. The whole thing with the fullscreen somehow not working properly.
+	I therefore advise you to avoid the fullscreen. Why?
+	- With the method Output = Surface, image remains black.
+	- With the method Output = Texture (nb), Fullscreen does not work in combination with a specified
+	  fullscreen resolution. Result: graphic error
+	- With the method Output = OpenGL (nb), see above.
+	- 3DFX. It may happen that crashes with the method OpenGL (nb) and Native Fullscreen Dosbox.
+	- When you quit Dosbox in fullscreen mode. Keys entered or in the DosShell "exit". Dosbox crashes.
+    I know. These are important things that need to be done.	
+	
+	Windows95 in Dosbox:
+	- Shutting down does not always work.
+	- The MsDOS Shell and a BPP 32Bit doesn't work
+	
 
 **Manually Update Status.
 r4007 - Not needed because SDL2, OpenGL Fix in the sdlmain

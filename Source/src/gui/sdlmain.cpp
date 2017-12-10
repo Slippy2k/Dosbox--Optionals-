@@ -134,7 +134,9 @@ struct SDL_Block {
 	bool updating;
 	bool update_display_contents;
 	bool update_window;
-	int window_desired_width, window_desired_height;
+	bool automaticheight;
+	int windowstaskbaradjust;
+	int window_desired_width, window_desired_height;	
 	struct {
 		Bit32u width;
 		Bit32u height;
@@ -269,109 +271,200 @@ static void SDL_Quit_Wrapper(void)
 extern const char* RunningProgram;
 extern bool CPU_CycleAutoAdjust;
 extern bool CPU_FastForward;
+extern const char* GFX_Type;
+
 //Globals for keyboard initialisation
 bool startup_state_numlock=true;
 bool startup_state_capslock=false;
 
 void GFX_SetTitle(Bit32s cycles,Bits frameskip,bool paused){
+	char strWinTitle[256];	
 	char title[200]={0};
 	static Bit32s internal_cycles=0;
 	static Bit32s internal_frameskip=0;
 	extern bool ticksLocked;
+	
+		if(strcmp(GFX_Type, (const char*)"hercules") == 0){
+			strcpy(strWinTitle,"Hercules");
+		}
+		if(strcmp(GFX_Type, (const char*)"cga") == 0){
+			strcpy(strWinTitle,"CGA");
+		}
+		if(strcmp(GFX_Type, (const char*)"cga_mono") == 0){
+			strcpy(strWinTitle,"CGA Mono");
+		}		
+		if(strcmp(GFX_Type, (const char*)"tandy") == 0){
+			strcpy(strWinTitle,"Tandy");			
+		}		
+		if(strcmp(GFX_Type, (const char*)"pcjr") == 0){
+			strcpy(strWinTitle,"PCJr");			
+		}
+		if(strcmp(GFX_Type, (const char*)"ega") == 0){
+			strcpy(strWinTitle,"EGA");			
+		}
+		if(strcmp(GFX_Type, (const char*)"svga_s3") == 0){
+			strcpy(strWinTitle,"S3 Trio");			
+		}
+		if(strcmp(GFX_Type, (const char*)"vesa_nolfb") == 0){			
+			strcpy(strWinTitle,"S3 Trio - NoLFB");			
+		}
+		if(strcmp(GFX_Type, (const char*)"vesa_oldvbe") == 0){		
+			strcpy(strWinTitle,"S3 Trio - Old VBE");			
+		}
+		if(strcmp(GFX_Type, (const char*)"svga_et4000") == 0){			
+			strcpy(strWinTitle,"Tseng ET4000");			
+		}
+		if(strcmp(GFX_Type, (const char*)"svga_et3000") == 0){		
+			strcpy(strWinTitle,"Tseng ET3000");			
+		}	
+		if(strcmp(GFX_Type, (const char*)"svga_paradise") == 0){	
+			strcpy(strWinTitle,"Paradise");			
+		}
+		if(strcmp(GFX_Type, (const char*)"vgaonly") == 0){		
+			strcpy(strWinTitle,"VGA");			
+		}
+		
 	if(cycles != -1) internal_cycles = cycles;
 	if(frameskip != -1) internal_frameskip = frameskip;
 	if (ticksLocked) {
-		sprintf(title,"DOSBox %s %s, Cpu Cycles: Max Unlocked, Frameskip %2d, Program: %8s",VERSION,DOSBOXREVISION,internal_frameskip,RunningProgram);
-		
-	} else if(CPU_CycleAutoAdjust && internal_cycles <= 99) {	
-		sprintf(title,"DOSBox %s %s, CPU Cycles: %3d Percent, Frameskip %2d, Program: %8s",VERSION,DOSBOXREVISION,internal_cycles,internal_frameskip,RunningProgram);
+		sprintf(title,"DOSBox %s %s, Cpu Cycles: Max Unlocked, %s, Frameskip %2d, Program: %8s",VERSION,DOSBOXREVISION,strWinTitle,internal_frameskip,RunningProgram);		
+	} else if(CPU_CycleAutoAdjust && internal_cycles <= 99) {		
+		sprintf(title,"DOSBox %s %s, CPU Cycles: %3d Percent, %s, Frameskip %2d, Program: %8s",VERSION,DOSBOXREVISION,internal_cycles,strWinTitle,internal_frameskip,RunningProgram);
 	} else if(CPU_CycleAutoAdjust && internal_cycles >= 100) {	
-		sprintf(title,"DOSBox %s %s, CPU Cycles: %3d Max, Frameskip %2d, Program: %8s",VERSION,DOSBOXREVISION,internal_cycles,internal_frameskip,RunningProgram);		
+	
+		sprintf(title,"DOSBox %s %s, CPU Cycles: %3d Max, %s, Frameskip %2d, Program: %8s",VERSION,DOSBOXREVISION,internal_cycles,strWinTitle,internal_frameskip,RunningProgram);		
 	} else {
 		
-		char strWinTitle[256];
+
 		strcpy(strWinTitle,"DOSBox %s %s, CPU Cycles: %3d");
 		
 		switch(internal_cycles){
 			case 341:
-				strcat(strWinTitle, " (CPU 8088/4.77mhz)");
+				strcat(strWinTitle, " (CPU 8088/4.77mhz");
 				break;
 			case 460:
-				strcat(strWinTitle, " (CPU 8088/7.16mhz)");
+				strcat(strWinTitle, " (CPU 8088/7.16mhz");
 				break;
 			case 618:
-				strcat(strWinTitle, " (CPU 8088/9.54mhz)");
+				strcat(strWinTitle, " (CPU 8088/9.54mhz");
 				break;	
 			case 1778:
-				strcat(strWinTitle, " (CPU 286/10mhz)");
+				strcat(strWinTitle, " (CPU 286/10mhz");
 				break;
 			case 2616:
-				strcat(strWinTitle, " (CPU 286/12mhz)");
+				strcat(strWinTitle, " (CPU 286/12mhz");
+				break;
+			case 3000:
+				strcat(strWinTitle, " (Dosbox Default");				
 				break;	
 			case 3360:
-				strcat(strWinTitle, " (CPU 286/16mhz)");
+				strcat(strWinTitle, " (CPU 286/16mhz");
 				break;	
 			case 4440:
-				strcat(strWinTitle, " (CPU 286/20mhz)");
+				strcat(strWinTitle, " (CPU 286/20mhz");
 				break;
 			case 5240:
-				strcat(strWinTitle, " (CPU 286/25mhz)");
+				strcat(strWinTitle, " (CPU 286/25mhz");
 				break;		
 			case 7785:
-				strcat(strWinTitle, " (CPU 386DX/25mhz)");
+				strcat(strWinTitle, " (CPU 386DX/25mhz");
 				break;
 			case 9349:
-				strcat(strWinTitle, " (CPU 386DX/33mhz)");
+				strcat(strWinTitle, " (CPU 386DX/33mhz");
 				break;
 			case 9384:
-				strcat(strWinTitle, " (CPU 386DX/40mhz)");
+				strcat(strWinTitle, " (CPU 386DX/40mhz");
 				break;	
 			case 9870:
-				strcat(strWinTitle, " (CPU 486SX/25mhz)");
+				strcat(strWinTitle, " (CPU 486SX/25mhz");
 				break;
 			case 13350:
-				strcat(strWinTitle, " (CPU 486DX/33mhz)");
+				strcat(strWinTitle, " (CPU 486DX/33mhz");
 				break;	
 			case 13461:
-				strcat(strWinTitle, " (CPU 486SX/33mhz)");
+				strcat(strWinTitle, " (CPU 486SX/33mhz");
 				break;
 			case 16100:
-				strcat(strWinTitle, " (CPU 486SX/40mhz)");
+				strcat(strWinTitle, " (CPU 486SX/40mhz");
 				break;	
 			case 20100:
-				strcat(strWinTitle, " (CPU 486DX/50mhz)");
+				strcat(strWinTitle, " (CPU 486DX/50mhz");
 				break;
 			case 27182:
-				strcat(strWinTitle, " (CPU 486DX-2/66mhz)");
+				strcat(strWinTitle, " (CPU 486DX-2/66mhz");
 				break;
 			case 32501:
-				strcat(strWinTitle, " (CPU 486DX-2/80mhz)");
+				strcat(strWinTitle, " (CPU 486DX-2/80mhz");
 				break;
 			case 40042:
-				strcat(strWinTitle, " (CPU 486DX-2/100mhz)");
+				strcat(strWinTitle, " (CPU 486DX-2/100mhz");
 				break;
 			case 50821:
-				strcat(strWinTitle, " (CPU 486DX-4/100mhz)");
+				strcat(strWinTitle, " (CPU 486DX-4/100mhz");
 				break;
 			case 60174:
-				strcat(strWinTitle, " (CPU 486DX-4/120mhz)");
+				strcat(strWinTitle, " (CPU 486DX-4/120mhz");
 				break;	
 			case 51330:
 				strcat(strWinTitle, " (CPU Pentium/60 [~66mhz]");
 				break;
 			case 69159:
-				strcat(strWinTitle, " (CPU Pentium/75 [~90mhz])");
+				strcat(strWinTitle, " (CPU Pentium/75 [~90mhz]");
 				break;
 			case 77500:
-				strcat(strWinTitle, " (CPU Pentium/100mhz)");
+				strcat(strWinTitle, " (CPU Pentium/100mhz");
 				break;					
 			default:
+				strcat(strWinTitle, " (Not Adjusted");			
 				break;
 		}
+	
+		
+		if(strcmp(GFX_Type, (const char*)"hercules") == 0){
+			strcat(strWinTitle,"/ Hercules)");
+		}
+		if(strcmp(GFX_Type, (const char*)"cga") == 0){
+			strcat(strWinTitle,"/ CGA)");
+		}
+		if(strcmp(GFX_Type, (const char*)"cga_mono") == 0){
+			strcat(strWinTitle,"/ CGA Mono)");
+		}		
+		if(strcmp(GFX_Type, (const char*)"tandy") == 0){
+			strcat(strWinTitle,"/ Tandy)");			
+		}		
+		if(strcmp(GFX_Type, (const char*)"pcjr") == 0){
+			strcat(strWinTitle,"/ PCJr)");			
+		}
+		if(strcmp(GFX_Type, (const char*)"ega") == 0){
+			strcat(strWinTitle,"/ EGA)");			
+		}
+		if(strcmp(GFX_Type, (const char*)"svga_s3") == 0){
+			strcat(strWinTitle,"/ S3 Trio)");			
+		}
+		if(strcmp(GFX_Type, (const char*)"vesa_nolfb") == 0){			
+			strcat(strWinTitle,"/ S3 Trio - Vesa 2.0 Patch)");			
+		}
+		if(strcmp(GFX_Type, (const char*)"vesa_oldvbe") == 0){		
+			strcat(strWinTitle,"/ S3 Trio - Old VBE)");			
+		}
+		if(strcmp(GFX_Type, (const char*)"svga_et4000") == 0){			
+			strcat(strWinTitle,"/ Tseng ET4000)");			
+		}
+		if(strcmp(GFX_Type, (const char*)"svga_et3000") == 0){		
+			strcat(strWinTitle,"/ Tseng ET3000)");			
+		}	
+		if(strcmp(GFX_Type, (const char*)"svga_paradise") == 0){	
+			strcat(strWinTitle,"/ Paradise)");			
+		}
+		if(strcmp(GFX_Type, (const char*)"vgaonly") == 0){		
+			strcat(strWinTitle,"/ VGA)");			
+		}
+			
 		strcat(strWinTitle,", Frameskip %2d, Program: %8s");		
 		//sprintf(title,"DOSBox %s %s, CPU Cycles: %3d, Frameskip %2d, Program: %8s",VERSION,DOSBOXREVISION,internal_cycles,internal_frameskip,RunningProgram);
 		sprintf(title,strWinTitle,VERSION,DOSBOXREVISION,internal_cycles,internal_frameskip,RunningProgram);		
 	}
+
 
 	if(paused){
 		strcat(title," PAUSED");
@@ -385,6 +478,7 @@ void GFX_SetTitle(Bit32s cycles,Bits frameskip,bool paused){
 	if(CPU_FastForward){
 		strcat(title," (Fast Forward On)");
 	}	
+	
 	
 	
 	SDL_SetWindowTitle(sdl.window,title); // VERSION is gone...
@@ -547,14 +641,19 @@ void Center_SDL_SetWindowMode(int pciW, int pciH){
 		// LOG_MSG("VOODOO: Mode: 01: DesW:%d DeskH:%d CurrW:%d CurrH:%d",displayMode.w,displayMode.h,pciW,pciH);	
 		/*==========================================================================*/
 		if ( pciW < displayMode.w && pciH < displayMode.h ){	
+			//LOG_MSG("SDL: Mode: 01: Index:%d, DesW:%d DeskH:%d CurrW:%d CurrH:%d, Bottom:%d",DesktopIndex, displayMode.w,displayMode.h,pciW,pciH,r.bottom);	
 			wTBH = 0;
-			if (DesktopIndex = 0)	{
-				wTBH = (displayMode.h - r.bottom )/2;
-				
+			if (DesktopIndex == 0)	{
+				if (displayMode.h != r.bottom){
+					wTBH = sdl.windowstaskbaradjust; 
+				}				
+				wTBH += (displayMode.h - r.bottom )/2;								
 			}			
 			posX          = (displayMode.w - pciW) /2;
 			posY         = ((displayMode.h - wTBH) - pciH) /2;
 			SDL_SetWindowPosition(sdl.window,posX , posY);	
+			
+
 			return;
 		}
 		/*==========================================================================*/		
@@ -573,9 +672,12 @@ void Center_SDL_SetWindowMode(int pciW, int pciH){
 		}	
 		/*==========================================================================*/
 		if ( pciW > displayMode.w &&  pciH < displayMode.h ){	
-			wTBH = 0;
-			if (DesktopIndex  = 0)	{		
-				wTBH = (displayMode.h - r.bottom )/2;	
+			wTBH = 0;		
+			if (DesktopIndex == 0)	{		
+				if (displayMode.h != r.bottom){
+					wTBH = sdl.windowstaskbaradjust; 
+				}				
+				wTBH += (displayMode.h - r.bottom )/2;	
 			}
 			posX          = (displayMode.w - pciW) /2;
 			posY         = ((displayMode.h - wTBH) - pciH) /2;		
@@ -598,9 +700,12 @@ void Center_SDL_SetWindowMode(int pciW, int pciH){
 		}	
 		/*==========================================================================*/
 		if ( pciW == displayMode.w &&  pciH < displayMode.h ){	
-			wTBH = 0;
-			if (DesktopIndex  = 0)	{		
-				wTBH = (displayMode.h - r.bottom )/2;	
+			wTBH = 0;		
+			if (DesktopIndex == 0)	{		
+				if (displayMode.h != r.bottom){
+					wTBH = sdl.windowstaskbaradjust; 
+				}				
+				wTBH += (displayMode.h - r.bottom )/2;	
 			}
 			posX          = (displayMode.w - pciW) /2;
 			posY         = ((displayMode.h - wTBH) - pciH) /2;			
@@ -792,7 +897,7 @@ static SDL_Window * GFX_SetupWindowScaled(SCREEN_TYPES screenType)
 		fixedHeight = sdl.desktop.window.height;
 	}
 	// LOG_MSG("SDL: fixedWidth = %d",sdl.desktop.window.width);
-	// LOG_MSG("SDL: fixedHeight = %d",sdl.desktop.window.height);	
+	// LOG_MSG("SDL: fixedHeight = %d",sdl.desktop.window.height);	//1024
 	
 	
 	if (fixedWidth && fixedHeight) {
@@ -806,7 +911,13 @@ static SDL_Window * GFX_SetupWindowScaled(SCREEN_TYPES screenType)
 		double ratio_h=(double)fixedHeight/(sdl.draw.height*sdl.draw.scaley);
 		if ( ratio_w < ratio_h) {
 			sdl.clip.w=fixedWidth;
-			sdl.clip.h=(Bit16u)(sdl.draw.height*sdl.draw.scaley*ratio_w + 0.1); //possible rounding issues
+			
+		if (sdl.automaticheight){
+			sdl.clip.h=(Bit16u)(sdl.draw.height*sdl.draw.scaley*ratio_w + 0.1); //possible rounding issues				
+		} else {
+			sdl.clip.h=fixedHeight;
+		}
+			
 		} else {
 			/*
 			 * The 0.4 is there to correct for rounding issues.
@@ -1175,7 +1286,17 @@ dosurface:
 			glDeleteShader(fragmentShader);
 		}
 
+		// LOG_MSG("=============================================");		
+		// LOG_MSG("sdl.clip.x: %d",sdl.clip.x);
+		// LOG_MSG("windowHeight: %d",windowHeight);		
+		// LOG_MSG("sdl.clip.y: %d",sdl.clip.y);
+		// LOG_MSG("sdl.clip.h: %d",sdl.clip.h);
+		// LOG_MSG("sdl.clip.h: %d",sdl.clip.w);	
+		// LOG_MSG("windowHeight: %d",windowHeight-(sdl.clip.y+sdl.clip.h),sdl.clip.w,sdl.clip.h);
+		// LOG_MSG("=============================================");		
+		
 		glViewport(sdl.clip.x,windowHeight-(sdl.clip.y+sdl.clip.h),sdl.clip.w,sdl.clip.h);
+
 
 		glDeleteTextures(1,&sdl.opengl.texture);
  		glGenTextures(1,&sdl.opengl.texture);
@@ -1767,6 +1888,8 @@ static void GUI_StartUp(Section * sec) {
 		}
 	}
 
+	sdl.automaticheight=section->Get_bool("AutomaticHeight");
+	sdl.windowstaskbaradjust=section->Get_int("WindowsTaskbarAdjust");
 	sdl.desktop.vsync=section->Get_bool("vsync");
 
 	sdl.displayNumber=section->Get_int("display");
@@ -2008,7 +2131,7 @@ static void GUI_StartUp(Section * sec) {
 			SDL_FillRect(sdl.surface, NULL, SDL_MapRGB(sdl.surface->format, 0, 0, 0));
 			SDL_UpdateWindowSurface(sdl.window);
 			
-		}
+		}	
 		SDL_FreeSurface(splash_surf);
 		delete [] tmpbufp;
 
@@ -2169,7 +2292,12 @@ void GFX_Events() {
 	}
 #endif
 	while (SDL_PollEvent(&event)) {
-		switch (event.type) {
+		if (event.type == SDL_QUIT) {			
+			LOG_MSG("Dosbox Quit ===============================================================");
+			throw(0);
+			break;	
+		}			
+		switch (event.type) {		
 		case SDL_WINDOWEVENT:
 			switch (event.window.event) {
 				case SDL_WINDOWEVENT_RESTORED:
@@ -2223,10 +2351,10 @@ void GFX_Events() {
 
 					GFX_SetTitle(-1,-1,true);
 					KEYBOARD_ClrBuffer();
-//					SDL_Delay(500);
-//					while (SDL_PollEvent(&ev)) {
+					SDL_Delay(500);
+					while (SDL_PollEvent(&ev)) {
 						// flush event queue.
-//					}
+					}
 
 					while (paused) {
 						// WaitEvent waits for an event rather than polling, so CPU usage drops to zero
@@ -2239,7 +2367,7 @@ void GFX_Events() {
 								// We've got focus back, so unpause and break out of the loop
 								if ((ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) || (ev.window.event == SDL_WINDOWEVENT_RESTORED) || (ev.window.event == SDL_WINDOWEVENT_EXPOSED)) {
 									paused = false;
-									GFX_SetTitle(-1,-1,false);
+									GFX_SetTitle(-1,-1,false);									
 								}
 
 								/* Now poke a "release ALT" command into the keyboard buffer
@@ -2266,21 +2394,31 @@ void GFX_Events() {
 		case SDL_MOUSEBUTTONUP:
 			HandleMouseButton(&event.button);
 			break;
-		case SDL_QUIT:
-			throw(0);
-			break;
 #ifdef WIN32
-		case SDL_KEYDOWN:
+		case SDL_KEYDOWN:	
 		case SDL_KEYUP:
 			// ignore event alt+tab
-			if (event.key.keysym.sym==SDLK_LALT) sdl.laltstate = (SDL_EventType)event.key.type;
-			if (event.key.keysym.sym==SDLK_RALT) sdl.raltstate = (SDL_EventType)event.key.type;
-			if (((event.key.keysym.sym==SDLK_TAB)) &&
-				((sdl.laltstate==SDL_KEYDOWN) || (sdl.raltstate==SDL_KEYDOWN))) break;
+			if (event.key.keysym.sym==SDLK_LALT){
+				sdl.laltstate = (SDL_EventType)event.key.type;
+			}
+			if (event.key.keysym.sym==SDLK_RALT){
+				sdl.raltstate = (SDL_EventType)event.key.type;
+			}
+			if (((event.key.keysym.sym==SDLK_TAB)) && ((sdl.laltstate==SDL_KEYDOWN) || (sdl.raltstate==SDL_KEYDOWN))){							
+				break;
+			}
 			// This can happen as well.
-			if (((event.key.keysym.sym == SDLK_TAB )) && (event.key.keysym.mod & KMOD_ALT)) break;
+			if (((event.key.keysym.sym == SDLK_TAB )) && (event.key.keysym.mod & KMOD_ALT)){
+				break;
+			}
 			// ignore tab events that arrive just after regaining focus. (likely the result of alt-tab)
-			if ((event.key.keysym.sym == SDLK_TAB) && (GetTicks() - sdl.focus_ticks < 2)) break;
+			if ((event.key.keysym.sym == SDLK_TAB) && (GetTicks() - sdl.focus_ticks < 2)){
+				break;
+			}
+			if (event.key.keysym.sym == SDLK_F4 && event.key.keysym.mod == SDLK_LALT){				
+				KillSwitch(true);
+				break;	
+			}				
 #endif
 #if defined (MACOSX)
 		case SDL_KEYDOWN:
@@ -2355,7 +2493,7 @@ void Config_Add_SDL() {
 	                  "Using your monitor's native resolution with aspect=true might give the best results. If you end\n"
 			          "up with small window on a large screen, try an output different from surface.");
 
-	Pstring = sdl_sec->Add_string("windowresolution",Property::Changeable::Always,"1280x800");	
+	Pstring = sdl_sec->Add_string("windowresolution",Property::Changeable::Always,"1280x960");	
 	Pstring->Set_help("================================================================================================\n"
 	                  "Scale the window to this size IF the output device supports hardware scaling.\n"
 	                  "(output=surface does not!)");
@@ -2411,6 +2549,12 @@ void Config_Add_SDL() {
 	                  "choice.");
 	Pstring->Set_values(renderers);
 
+	Pbool = sdl_sec->Add_bool("UseAspectHeight",Property::Changeable::Always,true);	
+	Pbool->Set_help(  "================================================================================================\n"
+	                  "This will set the Screen height in combination with Aspect Ratio. Example: if you set 1280x1024,\n"
+					  "this will shrink do the Aspect Scale 1280x960. If this set to false, Aspect Ratio has no Effect\n"
+					  "to the Screen. I use most 1280x1024 and i dont like the Screen shrink");	
+	
 	Pbool = sdl_sec->Add_bool("autolock",Property::Changeable::Always,true);
 	Pbool->Set_help(  "================================================================================================\n"
 	                  "Mouse will automatically lock, if you click on the screen. (Press CTRL-F10 to unlock)");
@@ -2466,7 +2610,29 @@ void Config_Add_SDL() {
 				       "1: CTRL+ALT+(Keypad *)\n"
 				       "2: CTRL+ALT+(Keypad -)\n"
 				       "3: CTRL+ALT+(Keypad +)\n"
-				       "4: CTRL+ALT+(Keypad /)\n");			
+				       "4: CTRL+ALT+(Keypad /)\n");	
+
+	Pbool = sdl_sec->Add_bool("VoodooUseOwnWindowRes",Property::Changeable::Always,false);
+	Pbool->Set_help(  "================================================================================================\n"
+	                  "Voodoo use the same Window Resolution how Dosbox 'windowresolution'. If set to true you can change\n"
+					   "in the section 'pci' a other Resolution");
+					   
+	Pbool = sdl_sec->Add_bool("VoodooUseOwnFullScRes",Property::Changeable::Always,false);
+	Pbool->Set_help(  "================================================================================================\n"
+	                  "Voodoo use the same Full Resolution how Dosbox 'fullresolution'. If set to true you can change\n"
+					   "in the section 'pci' a other Resolution");
+					   
+	Pbool = sdl_sec->Add_bool("VoodooDesktopFullScrn",Property::Changeable::Always,true);
+	Pbool->Set_help(  "================================================================================================\n"
+	                  "Voodoo Fullscreen Only. If true  - The 3DFX Voodoo Screen use the Fullscreen Desktop Mode.\n"
+					  "                        if false - The 3DFX Voodoo Screen use the normal Fullscreen.");					   
+					   
+	Pint = sdl_sec->Add_int("WindowsTaskbarAdjust",Property::Changeable::Always,-5);	
+	Pint->SetMinMax(-256,256);	
+	Pint->Set_help(    "================================================================================================\n"
+	                   "Window Only: Fine Adjust the height of the centered window. Use this if your Centered Window\n%s\n"
+					   "under and behind the Windows Taskbar is.");					   
+					   
 }
 
 static void show_warning(char const * const message) {
