@@ -1,3 +1,27 @@
+r4088 Convert variable stuff to vector (breakpoints one day as well)
+r4087 fix compilation on machines that have X11 libraries installed, but use an sdl without X11.
+r4086 Add some basic arm detection to configure for the raspberry and chromebook users
+r4085 dosbox-code-0-4085-dosbox-trunk
+r4084 Correct line ends in emu.h and setting correct svn properties
+r4083 Make it compile on VS 2008,as that one does not support the C99 standard library.
+r4082 upgrade visual studio file to add MAME sound stuff
+r4081 This looks more logical to me
+r4080 use correct datatype with scanf
+r4079 Remove exception specifiers as they are depreciated. Remove some trailing spaces and add some spaces for readability.
+r4078 Enable core inlining by default on configure/make build system
+r4077 Fix SBlaster issue with counter not being restarted with an autoinit transfer
+r4076 Declare the init function of the joystick as restartable, so some of the dynamic settings work.
+r4075 Merge the mamesound branch into trunk
+r4074 Another non-format warning fixed
+r4073 Correct small error/warning.
+r4072 Fix narrowing warnings (errors on clang/freebsd) and an unhandled value in switch. (Part of patch #275 from strageqargo)
+r4071 Declare static functions in header file as static inline, as that reduces warnings quite a bit.
+r4070 Silence a warning
+r4069 Beautify CPU_CheckSegments in order to silence a warning (if (A) B; break (which get a misleading warning as break is not part of the if))
+r4068 Fix compilation on current clang++
+r4067 Fix output of configure when --disable-opengl is used
+r4066 Allow an autoinit transfer to go over into a single cycle transfer/ Fixes Paddlers.
+r4065 Fix bug where joysticks got disabled after a section restart (when changing parameters while running).
 r4063 Remove some unnecessary things from prior commits; oops.
 r4062 Implement update region in mouse driver; only text modes for now. Fixes mouse pointer problems in Microsoft Programmer's Library.
 r4061 Add patch #265 to correct parameters and clock rate for some EGA modes. Also apply the yellow->brown fix to EGA text modes as well.

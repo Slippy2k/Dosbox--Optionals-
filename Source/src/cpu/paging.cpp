@@ -30,7 +30,7 @@
 #include "debug.h"
 #include "setup.h"
 
-#define LINK_TOTAL		(64*1024)
+#define LINK_TOTAL		(64*1024)//(64*1024)
 
 #define USERWRITE_PROHIBITED			((cpu.cpl&cpu.mpl)==3)
 

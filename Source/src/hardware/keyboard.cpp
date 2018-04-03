@@ -360,9 +360,10 @@ void KEYBOARD_AddKey(KBD_KEYS keytype,bool pressed) {
 		KEYBOARD_AddBuffer(0xe0);
 		KEYBOARD_AddBuffer(55|(pressed?0:0x80));
 		return;
-	case KBD_lwindows:extend=true;ret=0x1f;break;
-	case KBD_rwindows:extend=true;ret=0x27;break;
-	//case KBD_rwinmenu:extend=true;ret=0x2f;break;		
+	case KBD_lwindows:extend=true;ret=0x5B;break;
+	case KBD_rwindows:extend=true;ret=0x5C;break;
+	case KBD_rwinmenu:extend=true;ret=0x5D;break;
+	
 	default:
 		E_Exit("Unsupported key press");
 		break;

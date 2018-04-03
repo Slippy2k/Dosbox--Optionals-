@@ -996,7 +996,10 @@ void DOS_Shell::CMD_SET(char * args) {
 	//There are args:
 	char * pcheck = args;
 	while ( *pcheck && (*pcheck == ' ' || *pcheck == '\t')) pcheck++;
-	if (*pcheck && strlen(pcheck) >3 && (strncasecmp(pcheck,"/p ",3) == 0)) E_Exit("Set /P is not supported. Use Choice!");
+	if (*pcheck && strlen(pcheck) >3 && (strncasecmp(pcheck,"/p ",3) == 0)){
+		WriteOut("Set /P is not supported. Use Choice!");
+		return;
+	}
 
 	char * p=strpbrk(args, "=");
 	if (!p) {
@@ -1013,7 +1016,8 @@ void DOS_Shell::CMD_SET(char * args) {
 				*p_parsed++ = '%'; p += 2; //%% => % 
 			} else {
 				char * second = strchr(++p,'%');
-				if(!second) continue; *second++ = 0;
+				if (!second) continue;
+				*second++ = 0;
 				std::string temp;
 				if (GetEnvStr(p,temp)) {
 					std::string::size_type equals = temp.find('=');
@@ -1059,6 +1063,7 @@ void DOS_Shell::CMD_IF(char * args) {
 		do n = n * 10 + (*word - '0');
 		while (isdigit(*++word));
 		if(*word && !isspace(*word)) {
+			WriteOut("TEST");
 			WriteOut(MSG_Get("SHELL_CMD_IF_ERRORLEVEL_INVALID_NUMBER"));
 			return;
 		}

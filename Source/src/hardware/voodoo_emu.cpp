@@ -76,6 +76,7 @@ iterated W    = 18.32 [48 bits]
 
 #include "dosbox.h"
 #include "cross.h"
+#include "control.h"
 
 #include "voodoo_emu.h"
 #include "voodoo_opengl.h"
@@ -538,8 +539,88 @@ void raster_generic_2tmu(void *destbase, INT32 y, const poly_extent *extent, con
  *
  *************************************/
 
+ /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+int pciW=0;				
+int pciH=0;	
+int pciFSH = 0;
+int pciFSW = 0;
+void vGet_Configuration(void){
+	
+	Section_prop *section = static_cast<Section_prop *>(control->GetSection("pci"));
+	Section_prop *sectsdl = static_cast<Section_prop *>(control->GetSection("sdl"));	
+
+	const char* sOpenGLOutput;
+	const char* vresolution;
+	
+	bool UseOwnWindowResolution = false;
+	bool UseOwnFullScResolution = false;
+		
+	UseOwnWindowResolution  = sectsdl->Get_bool("VoodooUseOwnWindowRes");
+	UseOwnFullScResolution  = sectsdl->Get_bool("VoodooUseOwnFullScRes");	
+
+	// Voodoo Use the same Resolution Output how Dosbox
+	if (!UseOwnWindowResolution){
+		vresolution=sectsdl->Get_string("windowresolution");	
+	}else {
+		vresolution=section->Get_string("voodoo_Window");
+	}
+
+	
+	if(vresolution && *vresolution) {
+		char res[100];
+		safe_strncpy( res,vresolution, sizeof( res ));
+		vresolution = lowcase (res);//so x and X are allowed
+		if(strcmp(vresolution,"original") == 0) {
+				pciW = 640;				
+				pciH = 480;
+		}else if (strcmp(vresolution,"desktop") == 0 || strcmp(vresolution,"0x0") == 0) { //desktop = 0x0
+				pciW = 1280;				
+				pciH = 960;		
+		}else {
+			
+			char* height = const_cast<char*>(strchr(vresolution,'x'));
+			if(height && *height) {
+				*height = 0;
+				pciH = (Bit16u)atoi(height+1);
+				pciW = (Bit16u)atoi(res);
+			}
+		}
+	}	
+	
+	vresolution="";
+	// Voodoo Use the same Resolution Output how Dosbox	
+	if (!UseOwnFullScResolution){
+		vresolution=sectsdl->Get_string("fullresolution");	
+	}else {
+		vresolution=section->Get_string("voodoo_Fullscreen");
+	}
+	
+	pciFSH = 0;
+	pciFSW = 0;	
+	if(vresolution && *vresolution) {
+		char res[100];
+		safe_strncpy( res,vresolution, sizeof( res ));
+		vresolution = lowcase (res);//so x and X are allowed
+		if (strcmp(vresolution,"original") == 0) {
+				pciW = 640;
+				pciH = 480;
+		}else if (strcmp(vresolution,"desktop") == 0 || strcmp(vresolution,"0x0") == 0) { //desktop = 0x0
+				pciW = 1280;				
+				pciH = 960;	
+		}else{
+				char* height = const_cast<char*>(strchr(vresolution,'x'));
+				if(height && *height) {
+					*height = 0;
+					pciH = (Bit16u)atoi(height+1);
+					pciW = (Bit16u)atoi(res);
+				}
+		}
+	}
+}
+	
 void init_fbi(voodoo_state *v, fbi_state *f, int fbmem)
 {
+
 	if (fbmem <= 1) E_Exit("VOODOO: invalid frame buffer memory size requested");
 	/* allocate frame buffer RAM and set pointers */
 	f->ram = (UINT8*)malloc(fbmem);
@@ -550,8 +631,12 @@ void init_fbi(voodoo_state *v, fbi_state *f, int fbmem)
 	/* default to 0x0 */
 	f->frontbuf = 0;
 	f->backbuf = 1;
-	f->width = 640;
-	f->height = 480;
+	
+	vGet_Configuration();
+	f->width = pciW;
+	f->height = pciH;	
+	//f->width = 640;
+	//f->height = 480;
 //	f->xoffs = 0;
 //	f->yoffs = 0;
 

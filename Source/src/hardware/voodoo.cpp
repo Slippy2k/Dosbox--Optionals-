@@ -68,7 +68,7 @@ public:
 
 		Bits card_type = 1;
 		bool max_voodoomem;
-		std::string voodoo_mem_str(section->Get_string("voodoomem"));
+		std::string voodoo_mem_str(section->Get_string("Voodoo_Memory"));
 		if (voodoo_mem_str=="max") {
 			max_voodoomem = true;
 		} else {

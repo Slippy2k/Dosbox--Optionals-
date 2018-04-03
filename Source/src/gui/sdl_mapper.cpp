@@ -1684,7 +1684,7 @@ static void CreateLayout(void) {
 	AddKeyButtonEvent(PX(4) ,PY(5),BW*7,BH,"SPACE","space",KBD_space);
 	AddKeyButtonEvent(PX(11),PY(5),BW*1,BH,"ALT","ralt",KBD_rightalt);
 	AddKeyButtonEvent(PX(12),PY(5),BW*1,BH,"WIN","rwindows",KBD_rwindows);
-	//AddKeyButtonEvent(PX(13),PY(5),BW*1,BH,"WMN","rwinmenu",KBD_rwinmenu);
+	AddKeyButtonEvent(PX(13),PY(5),BW*1,BH,"WMN","rwinmenu",KBD_rwinmenu);
 	AddKeyButtonEvent(PX(14),PY(5),BW*2,BH,"CTRL","rctrl",KBD_rightctrl);
 
 	/* Arrow Keys */
@@ -1946,7 +1946,7 @@ static struct {
 	/* Windows 95 keyboard stuff */
 	{"lwindows",SDL_SCANCODE_LGUI},
 	{"rwindows",SDL_SCANCODE_RGUI},
-	//{"rwinmenu",SDLK_MENU},
+	{"rwinmenu",SDL_SCANCODE_MENU},
 	
 	{0,0}
 };
@@ -2366,9 +2366,11 @@ void MAPPER_Init(void) {
 	}
 }
 //Somehow including them at the top conflicts with something in setup.h
-#ifdef C_X11_XKB
-#include "SDL_syswm.h"
-#include <X11/XKBlib.h>
+#ifdef SDL_VIDEO_DRIVER_X11
+	#ifdef C_X11_XKB
+		#include "SDL_syswm.h"
+		#include <X11/XKBlib.h>
+	#endif
 #endif
 void MAPPER_StartUp(Section * sec) {
 	Section_prop * section=static_cast<Section_prop *>(sec);

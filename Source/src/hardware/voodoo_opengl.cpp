@@ -74,10 +74,14 @@ struct SDL_Block {
 	struct {
 		SDL_GLContext GLContext;
 		int	GL_filtering;
+		int TrilinearAmount;
+		int	GL_ShadeModel;
+		const char*	sglshademdl;	
 		const char*	sfiltering;	
 		GLint minFilter;
 		bool compatibleFlag;
 		void * framebuf;
+
 	}opengl;
 	Uint32 sdl_WindowFlags;
 	Uint32 sdl_FullS_Flags;
@@ -1170,11 +1174,7 @@ void ogl_shaders(const poly_extra_data *extra) {
 
 
 void voodoo_ogl_draw_triangle(poly_extra_data *extra) {
-	
-	
 
-	
-		
 	voodoo_state *v=extra->state;
 	ogl_texture_data td[2];
 	ogl_vertex_data vd[3];
@@ -1261,14 +1261,22 @@ void voodoo_ogl_draw_triangle(poly_extra_data *extra) {
 					
 				case 2:
 					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);				
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+					break;
+					
+				case 3:
+					sdl.opengl.minFilter = GL_LINEAR + TEXMODE_MINIFICATION_FILTER(TEXMODE);
+					if (v->tmu[t].lodmin != v->tmu[t].lodmax)		
+						sdl.opengl.minFilter += 0x100 + TEXMODE_TRILINEAR(TEXMODE)*sdl.opengl.TrilinearAmount;						
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, sdl.opengl.minFilter);				
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR+TEXMODE_MAGNIFICATION_FILTER(TEXMODE));					
 					break;
 					
 				case 0:
 				default:
 					sdl.opengl.minFilter = GL_NEAREST + TEXMODE_MINIFICATION_FILTER(TEXMODE);
 					if (v->tmu[t].lodmin != v->tmu[t].lodmax)
-						sdl.opengl.minFilter += 0x0100 + TEXMODE_TRILINEAR(TEXMODE)*2;
+						sdl.opengl.minFilter += 0x0100 + TEXMODE_TRILINEAR(TEXMODE)*sdl.opengl.TrilinearAmount;
 						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,sdl.opengl.minFilter);
 						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST+TEXMODE_MAGNIFICATION_FILTER(TEXMODE));				
 					break;												
@@ -1765,7 +1773,7 @@ void vPCI_SDL_SetWindowMode(void){
 		}		
 	
 }
-
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void voodoo_ogl_set_window(voodoo_state *v) {
 	
 		// /* Clear our buffer with a red background */
@@ -1832,38 +1840,27 @@ void voodoo_ogl_set_window(voodoo_state *v) {
 	if (size_changed) {	
 		
 		if (sdl.fullscreen){
-			// if ( v->fbi.height < sdl.pciFSH && sdl.fullscreen){					
-				// adjust_y=(sdl.pciFSH-v->fbi.height)/2;
-			// }
-			// if( v->fbi.width < sdl.pciFSW && sdl.fullscreen){
-				// adjust_x=(sdl.pciFSW-v->fbi.width)/2;
-			// }
-			// LOG_MSG("VOODOO FULLSCREEN: adjust_x %d",adjust_x);
-			// LOG_MSG("VOODOO FULLSCREEN: adjust_y %d",adjust_y);
-			// LOG_MSG("VOODOO FULLSCREEN: dl.pciFSW %d",sdl.pciFSW);
 			if (sdl.ScrOpenGL_Flags & SDL_WINDOW_FULLSCREEN_DESKTOP){
 				SDL_DisplayMode displayMode;
 				SDL_GetDesktopDisplayMode(0, &displayMode);					
 				adjust_x = (displayMode.w - sdl.pciFSW) /2;
 				adjust_y = (displayMode.h - sdl.pciFSH) /2;			
-			}			
-			LOG_MSG("VOODOO FULLSCREEN: dl.pciFSH %d",sdl.pciFSH);
-			
+			}					
 			glViewport( adjust_x, adjust_y, sdl.pciFSW, sdl.pciFSH );				
 			
 		}else{			
-			LOG_MSG("VOODOO WINDOW");
-			vPCI_SDL_SetWindowMode();
-			adjust_x = sdl.posX;
-			adjust_x = sdl.posY;
-			glViewport( adjust_x, adjust_y, sdl.pciW, sdl.pciH );	
+		
+			glViewport( 0, 0, sdl.pciW, sdl.pciH );	
 		}
 		
-		glClearColor (0.0, 0.0, 0.0, 1.0);
-		glShadeModel (GL_FLAT);
-
-		//sdl.pciW = v->fbi.width;
-		//sdl.pciH = v->fbi.height;
+		//LOG_MSG("glViewport 2 %dx%d",sdl.pciW, sdl.pciH);
+		//glClearColor (0.0, 0.0, 0.0, 1.0);	
+		if (sdl.opengl.GL_ShadeModel==0){			
+		}else if (sdl.opengl.GL_ShadeModel==1){
+			glShadeModel(GL_FLAT);		
+		}else if (sdl.opengl.GL_ShadeModel==2){			
+			glShadeModel(GL_SMOOTH);
+		}
 	}
 }
 
@@ -1881,9 +1878,6 @@ void vPCI_SDL_Free_VSurface(void)
 	sdl.surface = NULL;
 	}
 }
-
-
-
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void vPCI_Get_Configuration(void){
 	
@@ -1897,10 +1891,11 @@ void vPCI_Get_Configuration(void){
 	bool UseOwnFullScResolution = false;
 		 sdl.full_fixed 		= false;
 		
-	UseOwnWindowResolution = sectsdl->Get_bool("VoodooUseOwnWindowRes");
-	UseOwnFullScResolution = sectsdl->Get_bool("VoodooUseOwnFullScRes");	
+	UseOwnWindowResolution  = sectsdl->Get_bool("VoodooUseOwnWindowRes");
+	UseOwnFullScResolution  = sectsdl->Get_bool("VoodooUseOwnFullScRes");	
 	
-	sdl.opengl.sfiltering=section->Get_string("voodoofiltering");
+	sdl.opengl.sfiltering   =section->Get_string("Voodoo_Filter");
+	sdl.opengl.sglshademdl  =section->Get_string("Voodoo_GLShade");	
 	sOpenGLOutput=section->Get_string("voodoo");
 
 	// Voodoo Use the same Resolution Output how Dosbox
@@ -1971,12 +1966,33 @@ void vPCI_Get_Configuration(void){
 	{
 		sdl.opengl.GL_filtering=1;
 		
-	}else if (!strcasecmp(sdl.opengl.sfiltering,"gl_linear"))
+	}else if (!strcasecmp(sdl.opengl.sfiltering,"gl_linear_1"))
 	{
 		sdl.opengl.GL_filtering=2;
-	}
 	
-	sdl.opengl.compatibleFlag	=  section->Get_bool("compatible_flag");	
+	}else if (!strcasecmp(sdl.opengl.sfiltering,"gl_linear_2"))
+	{
+		sdl.opengl.GL_filtering=3;
+	}	
+	
+	if (!strcasecmp(sdl.opengl.sglshademdl,"none"))
+	{
+		sdl.opengl.GL_ShadeModel=0;
+		
+	}else if (!strcasecmp(sdl.opengl.sglshademdl,"flat"))
+	{
+		sdl.opengl.GL_ShadeModel=1;
+		
+	}else if (!strcasecmp(sdl.opengl.sglshademdl,"smooth"))
+	{
+		sdl.opengl.GL_ShadeModel=2;
+	
+	}	
+	
+	
+	sdl.opengl.TrilinearAmount	=  section->Get_int("TrilinearAmount");
+	sdl.opengl.compatibleFlag	=  section->Get_bool("compatible_flag");
+	
 	sdl.OpenGLDesktopFullScreen =  sectsdl->Get_bool("VoodooDesktopFullScrn");		
 	sdl.windowstaskbaradjust 	=  sectsdl->Get_int("WindowsTaskbarAdjust");	
 	sdl.dosbox.output  			=  sectsdl->Get_string("output");
@@ -2012,7 +2028,7 @@ void vPCI_Set_GL_Attributes(void){
 		sdl.pciFSW = 640;
 		sdl.pciFSH = 480;		
 		sdl.pciW = 640;
-		sdl.pciH = 640;			
+		sdl.pciH = 480;			
 		SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
 		SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
 		SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
@@ -2095,7 +2111,8 @@ void vPCI_SDL_SetSDLContext(void){
 		sdl.opengl.GLContext = SDL_GL_CreateContext(sdl.surface);	
 		// LOG_MSG("VOODOOD: SDL_GL_CreateContext Finished");		
 		SDL_GL_MakeCurrent(sdl.surface, sdl.opengl.GLContext);		
-		// LOG_MSG("VOODOOD: SDL_GL_MakeCurrent Finished");		
+		// LOG_MSG("VOODOOD: SDL_GL_MakeCurrent Finished");
+		SDL_PumpEvents();		
 		SDL_GL_SwapWindow(sdl.surface);
 		// LOG_MSG("VOODOOD: SDL_GL_SwapWindow Finished");		
 	#endif		
@@ -2196,7 +2213,7 @@ void vPCI_SDL_Init_OpenGLCX(void) {
 	const bool shouldGrab = (sdl.ScrOpenGL_Flags & SDL_WINDOW_INPUT_GRABBED);	
 	SDL_SetWindowGrab(sdl.surface, shouldGrab ? SDL_TRUE : SDL_FALSE);		
 	
-	GFX_SwitchLazyFullscreen(true);
+	//GFX_SwitchLazyFullscreen(true);
 	GFX_UpdateSDLCaptureState();		
 	int value;
 

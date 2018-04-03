@@ -2375,7 +2375,7 @@ void GFX_Events() {
 								 * problems with the app running in the DOSBox.
 								 */
 								KEYBOARD_AddKey(KBD_leftalt, false);
-								KEYBOARD_AddKey(KBD_rightalt, false);
+								KEYBOARD_AddKey(KBD_rightalt, false);							
 								if (ev.window.event == SDL_WINDOWEVENT_RESTORED) {
 									// We may need to re-create a texture and more
 									GFX_ResetScreen();
@@ -2395,8 +2395,8 @@ void GFX_Events() {
 			HandleMouseButton(&event.button);
 			break;
 #ifdef WIN32
-		case SDL_KEYDOWN:	
-		case SDL_KEYUP:
+		case SDL_KEYDOWN:				
+		case SDL_KEYUP:	
 			// ignore event alt+tab
 			if (event.key.keysym.sym==SDLK_LALT){
 				sdl.laltstate = (SDL_EventType)event.key.type;

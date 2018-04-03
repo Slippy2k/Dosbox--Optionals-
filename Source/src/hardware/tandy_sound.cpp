@@ -184,7 +184,7 @@ static void TandyDACWrite(Bitu port,Bitu data,Bitu /*iolen*/) {
 		}
 		break;
 	case 0xc6:
-		tandy.dac.frequency = tandy.dac.frequency & 0xf00 | (Bit8u)(data&0xff);
+		tandy.dac.frequency = (tandy.dac.frequency & 0xf00) | (Bit8u)(data & 0xff);
 		switch (tandy.dac.mode&3) {
 		case 0:
 			// joystick mode
@@ -197,7 +197,7 @@ static void TandyDACWrite(Bitu port,Bitu data,Bitu /*iolen*/) {
 		}
 		break;
 	case 0xc7:
-		tandy.dac.frequency = tandy.dac.frequency & 0x00ff | (((Bit8u)(data&0xf))<<8);
+		tandy.dac.frequency = (tandy.dac.frequency & 0x00ff) | (((Bit8u)(data & 0xf)) << 8);
 		tandy.dac.amplitude = (Bit8u)(data>>5);
 		switch (tandy.dac.mode&3) {
 		case 0:
@@ -222,7 +222,7 @@ static Bitu TandyDACRead(Bitu port,Bitu /*iolen*/) {
 	case 0xc7:
 		return (Bit8u)(((tandy.dac.frequency>>8)&0xf) | (tandy.dac.amplitude<<5));
 	}
-	LOG_MSG("TANDY: Tandy DAC, Read from unknown %X",port);
+	LOG_MSG("Tandy DAC: Read from unknown %X",port);
 	return 0xff;
 }
 

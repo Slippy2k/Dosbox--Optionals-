@@ -236,8 +236,9 @@ void increaseticks() { //Make it return ticksRemain and set it in the function a
 	if (ticksScheduled >= 250 || ticksDone >= 250 || (ticksAdded > 15 && ticksScheduled >= 5) ) {
 		if(ticksDone < 1) ticksDone = 1; // Protect against div by zero
 		/* ratio we are aiming for is around 90% usage*/
-		Bit32s ratio = (ticksScheduled * (CPU_CyclePercUsed*90*1024/100/100)) / ticksDone;
+		Bit32s ratio = (ticksScheduled * (CPU_CyclePercUsed*90*1110/100/100+1)) / ticksDone;
 		Bit32s new_cmax = CPU_CycleMax;
+
 		Bit64s cproc = (Bit64s)CPU_CycleMax * (Bit64s)ticksScheduled;
 		double ratioremoved = 0.0; //increase scope for logging
 		if (cproc > 0) {
@@ -473,7 +474,7 @@ void DOSBOX_Init(void) {
 	secprop->AddInitFunction(&MEM_Init);//done
 	secprop->AddInitFunction(&HARDWARE_Init);//done
 	Pint = secprop->Add_int("memsize", Property::Changeable::WhenIdle,16);
-	Pint->SetMinMax(1,512);
+	Pint->SetMinMax(1,1024);
 	Pint->Set_help(     "================================================================================================\n"
 		                "Amount of memory DOSBox has in megabytes.\n"
 		                "This value is best left at its default to avoid problems with some games, though few games\n"
@@ -671,25 +672,36 @@ void DOSBOX_Init(void) {
 	Pstring->Set_help(      "================================================================================================\n"
 	                        "Enable VOODOO support. Use the Voodoo Emulation with the Output method (Cat: sdl) Surface\n"	
      				        "Texture or TextureNB, OpenGL/OpenGLNB. Recommend: Texture/Texturenb. Performance Setting: Set the\n"
-					        "Texture Renderer to OpenGL. Acceleration will be disabled on auto, direct3d or Software");
+					        "Texture Renderer to OpenGL. Acceleration will be disabled on auto, direct3d or Software\n"
+							"NOTE: If you use SOFTWARE Mode. Aspect Ratio must set to FALSE or you become gfx glitches");
 	
 	const char* voodoo_memory[] = {"standard","max",0};
-	Pstring = secprop->Add_string("voodoomem",Property::Changeable::OnlyAtStart,"standard");
+	Pstring = secprop->Add_string("Voodoo_Memory",Property::Changeable::OnlyAtStart,"standard");
 	Pstring->Set_values(voodoo_memory);
 	Pstring->Set_help(      "================================================================================================\n"
 	                        "Specify VOODOO card memory size.\n"
 		                     "   standard  : 4MB  card (2MB front buffer + 1x2MB texture unit)\n"
 					         "   max       : 12MB card (4MB front buffer + 2x4MB texture units)");
 					  
-	const char* voodoo_filter[] = {"default","gl_nearest","gl_linear",0};						  
-	Pstring = secprop->Add_string("voodoofiltering",Property::Changeable::WhenIdle,"default");
+	const char* voodoo_filter[] = {"default","gl_nearest","gl_linear_1","gl_linear_2",0};		
+	Pstring = secprop->Add_string("Voodoo_Filter",Property::Changeable::WhenIdle,"default");
 	Pstring->Set_values(voodoo_filter);	
 	Pstring->Set_help(      "================================================================================================\n"
 	                        "Filtering in OpenGL Mode\n"
-	                        "   default   : GL_NEAREST+TEXMODE_MAGNIFICATION_FILTER\n"
-					        "   gl_nearest: Screen will not Filtering\n"
-					        "   gl_linear : Screen will be Full Filtering");	
-				
+	                        "   default     : GL_Nearest & Trilinear Filter\n"
+					        "   gl_nearest  : Screen will not Filtering\n"
+					        "   gl_linear_1 : Screen will be Full Filtering"
+							"   gl_linear_2 : GL_Linear &  & Trilinear Filter");	
+										
+	const char* voodoo_glshade[] = {"none", "flat", "smooth",0};						  
+	Pstring = secprop->Add_string("Voodoo_GLShade",Property::Changeable::WhenIdle,"none");
+	Pstring->Set_values(voodoo_glshade);	
+	Pstring->Set_help(      "================================================================================================\n"
+	                        "Filtering in OpenGL Mode\n"
+	                        "   none       : Default Value \n"
+					        "   flat       : GL_ShadeModel using flat\n"
+					        "   smooth     : GL_ShadeModel using smooth");
+							
 	Pstring = secprop->Add_string("voodoo_Window",Property::Changeable::OnlyAtStart,"640x480");
 	Pstring->Set_help(      "================================================================================================\n"
 	                        "Change Voodoo/3DFX Glide Resolution in Window Mode. Possible values are 640x480,800x600,1024x768\n"
@@ -703,6 +715,11 @@ void DOSBOX_Init(void) {
 					        "resolution it may be that there are graphics errors.\n"
 					        "Success in Window/Fullscreen Mdoe: Tomb Raider, Good: Fatal Racing, Bad: Blood 3DFX or PYL");
 	
+	Pint = secprop->Add_int("TrilinearAmount",Property::Changeable::OnlyAtStart,2);
+	Pint->SetMinMax(2,64);
+	Pint->Set_help(         "================================================================================================\n"
+	                        "Trilinear Filtering Amount. Only for default & gl_linear_2 (Default is Value 2)");
+							
 	Pbool = secprop->Add_bool("compatible_flag",Property::Changeable::Always,false);		
 	Pbool->Set_help(        "================================================================================================\n"
 	                        "This flag is intended to put the GL into a \"forward compatible\" mode, which means that no\n"
@@ -1043,7 +1060,7 @@ void DOSBOX_Init(void) {
 	secprop=control->AddSection_prop("joystick",&BIOS_Init,false);//done
 	secprop->AddInitFunction(&INT10_Init);
 	secprop->AddInitFunction(&MOUSE_Init); //Must be after int10 as it uses CurMode
-	secprop->AddInitFunction(&JOYSTICK_Init);
+	secprop->AddInitFunction(&JOYSTICK_Init,true);
 	const char* joytypes[] = { "auto", "2axis", "4axis", "4axis_2", "fcs", "ch", "none",0};
 	Pstring = secprop->Add_string("joysticktype",Property::Changeable::WhenIdle,"auto");
 	Pstring->Set_values(joytypes);

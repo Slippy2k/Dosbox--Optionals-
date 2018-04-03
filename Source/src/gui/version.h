@@ -20,17 +20,17 @@
  *
  */
 
-#define DOSBOXREVISION "r4066 (Optionals)"
-#define DOSBOXSVERSION "r4066"
+#define DOSBOXREVISION "r4088 (Optionals)"
+#define DOSBOXSVERSION "r4088"
 
 #define DOSBOXFEATSGFX "3DFX CGA-Extension "
-#define DOSBOXFEATSSND "MT32 SSI2001 M.A.M.E.-Sound Nuked-OPL3"
+#define DOSBOXFEATSSND "MT32 SSI2001 M.A.M.E.-Sound Nuked-OPL3(v1.8)"
 
 extern const char *gDosboxDay;
 extern const char *gDosboxMonth;
 extern const char *gDosboxYear;
 extern const char *gDosboxBuildSVN;		// e.g. "SVN"
-extern const char *gDosboxRevision;		// e.g. "r4063"
+extern const char *gDosboxRevision;		// e.g. "r40xx"
 extern const char *gDosboxBuildDate;    // e.g. "2002-01-01"
 extern const char *gDosboxFullVersion;  // e.g. "DOSBox SVN r4036  (2002-01-01)"
 extern const char *gDOSBoxFeatures;		// e.g. "32Bit (DynamicX68) (Fpu Core X68)"

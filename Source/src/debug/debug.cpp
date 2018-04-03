@@ -22,6 +22,7 @@
 
 #include <string.h>
 #include <list>
+#include <vector>
 #include <ctype.h>
 #include <fstream>
 #include <iomanip>
@@ -244,26 +245,31 @@ bool GetDescriptorInfo(char* selname, char* out1, char* out2)
 class CDebugVar
 {
 public:
-	CDebugVar(char* _name, PhysPt _adr) { adr=_adr; safe_strncpy(name,_name,16); };
+	CDebugVar(char* _name, PhysPt _adr) { adr=_adr; safe_strncpy(name,_name,16); hasvalue = false; value = 0; };
 	
-	char*	GetName(void) { return name; };
-	PhysPt	GetAdr (void) { return adr;  };
+	char*  GetName (void)                 { return name; };
+	PhysPt GetAdr  (void)                 { return adr; };
+	void   SetValue(bool has, Bit16u val) { hasvalue = has; value=val; };
+	Bit16u GetValue(void)                 { return value; };
+	bool   HasValue(void)                 { return hasvalue; };
 
 private:
 	PhysPt  adr;
-	char	name[16];
+	char    name[16];
+	bool    hasvalue;
+	Bit16u  value;
 
 public: 
-	static void			InsertVariable	(char* name, PhysPt adr);
-	static CDebugVar*	FindVar			(PhysPt adr);
-	static void			DeleteAll		();
-	static bool			SaveVars		(char* name);
-	static bool			LoadVars		(char* name);
+	static void       InsertVariable(char* name, PhysPt adr);
+	static CDebugVar* FindVar       (PhysPt adr);
+	static void       DeleteAll     ();
+	static bool       SaveVars      (char* name);
+	static bool       LoadVars      (char* name);
 
-	static std::list<CDebugVar*>	varList;
+	static std::vector<CDebugVar*> varList;
 };
 
-std::list<CDebugVar*> CDebugVar::varList;
+std::vector<CDebugVar*> CDebugVar::varList;
 
 
 /********************/
@@ -419,7 +425,7 @@ void CBreakpoint::ActivateBreakpoints()
 {
 	// activate all breakpoints
 	std::list<CBreakpoint*>::iterator i;
-	for (i = BPoints.begin(); i != BPoints.end(); i++)
+	for (i = BPoints.begin(); i != BPoints.end(); ++i)
 		(*i)->Activate(true);
 }
 
@@ -427,7 +433,7 @@ void CBreakpoint::DeactivateBreakpoints()
 {
 	// deactivate all breakpoints
 	std::list<CBreakpoint*>::iterator i;
-	for (i = BPoints.begin(); i != BPoints.end(); i++)
+	for (i = BPoints.begin(); i != BPoints.end(); ++i)
 		(*i)->Activate(false);
 }
 
@@ -435,7 +441,7 @@ void CBreakpoint::ActivateBreakpointsExceptAt(PhysPt adr)
 {
 	// activate all breakpoints, except those at adr
 	std::list<CBreakpoint*>::iterator i;
-	for (i = BPoints.begin(); i != BPoints.end(); i++) {
+	for (i = BPoints.begin(); i != BPoints.end(); ++i) {
 		CBreakpoint* bp = (*i);
 		// Do not activate breakpoints at adr
 		if (bp->GetType() == BKPNT_PHYSICAL && bp->GetLocation() == adr)
@@ -449,11 +455,11 @@ bool CBreakpoint::CheckBreakpoint(Bitu seg, Bitu off)
 {
 	// Quick exit if there are no breakpoints
 	if (BPoints.empty()) return false;
-	
+
 	// Search matching breakpoint
 	std::list<CBreakpoint*>::iterator i;
 	CBreakpoint* bp;
-	for(i=BPoints.begin(); i != BPoints.end(); i++) {
+	for(i=BPoints.begin(); i != BPoints.end(); ++i) {
 		bp = (*i);
 		if ((bp->GetType()==BKPNT_PHYSICAL) && bp->IsActive() && (bp->GetSegment()==seg) && (bp->GetOffset()==off)) {
 			// Found, 
@@ -509,10 +515,11 @@ bool CBreakpoint::CheckIntBreakpoint(PhysPt adr, Bit8u intNr, Bit16u ahValue, Bi
 // Checks if interrupt breakpoint is valid and should stop execution
 {
 	if (BPoints.empty()) return false;
+
 	// Search matching breakpoint
 	std::list<CBreakpoint*>::iterator i;
 	CBreakpoint* bp;
-	for(i=BPoints.begin(); i != BPoints.end(); i++) {
+	for(i=BPoints.begin(); i != BPoints.end(); ++i) {
 		bp = (*i);
 		if ((bp->GetType()==BKPNT_INTERRUPT) && bp->IsActive() && (bp->GetIntNr()==intNr)) {
 			if (((bp->GetValue()==BPINT_ALL) || (bp->GetValue()==ahValue)) && ((bp->GetOther()==BPINT_ALL) || (bp->GetOther()==alValue))) {
@@ -535,7 +542,7 @@ void CBreakpoint::DeleteAll()
 {
 	std::list<CBreakpoint*>::iterator i;
 	CBreakpoint* bp;
-	for(i=BPoints.begin(); i != BPoints.end(); i++) {
+	for(i=BPoints.begin(); i != BPoints.end(); ++i) {
 		bp = (*i);
 		bp->Activate(false);
 		delete bp;
@@ -550,7 +557,7 @@ bool CBreakpoint::DeleteByIndex(Bit16u index)
 	int nr = 0;
 	std::list<CBreakpoint*>::iterator i;
 	CBreakpoint* bp;
-	for(i=BPoints.begin(); i != BPoints.end(); i++) {
+	for(i=BPoints.begin(); i != BPoints.end(); ++i) {
 		if (nr==index) {
 			bp = (*i);
 			(BPoints.erase)(i);
@@ -565,13 +572,14 @@ bool CBreakpoint::DeleteByIndex(Bit16u index)
 
 CBreakpoint* CBreakpoint::FindPhysBreakpoint(Bit16u seg, Bit32u off, bool once)
 {
+	if (BPoints.empty()) return 0;
 #if !C_HEAVY_DEBUG
 	PhysPt adr = GetAddress(seg, off);
 #endif
 	// Search for matching breakpoint
 	std::list<CBreakpoint*>::iterator i;
 	CBreakpoint* bp;
-	for(i=BPoints.begin(); i != BPoints.end(); i++) {
+	for(i=BPoints.begin(); i != BPoints.end(); ++i) {
 		bp = (*i);
 #if C_HEAVY_DEBUG
 		// Heavy debugging breakpoints are triggered by matching seg:off
@@ -591,7 +599,7 @@ CBreakpoint* CBreakpoint::FindPhysBreakpoint(Bit16u seg, Bit32u off, bool once)
 CBreakpoint* CBreakpoint::FindOtherActiveBreakpoint(PhysPt adr, CBreakpoint* skip)
 {
 	std::list<CBreakpoint*>::iterator i;
-	for (i = BPoints.begin(); i != BPoints.end(); i++) {
+	for (i = BPoints.begin(); i != BPoints.end(); ++i) {
 		CBreakpoint* bp = (*i);
 		if (bp != skip && bp->GetType() == BKPNT_PHYSICAL && bp->GetLocation() == adr && bp->IsActive())
 			return bp;
@@ -623,7 +631,7 @@ void CBreakpoint::ShowList(void)
 	// iterate list 
 	int nr = 0;
 	std::list<CBreakpoint*>::iterator i;
-	for(i=BPoints.begin(); i != BPoints.end(); i++) {
+	for(i=BPoints.begin(); i != BPoints.end(); ++i) {
 		CBreakpoint* bp = (*i);
 		if (bp->GetType()==BKPNT_PHYSICAL) {
 			DEBUG_ShowMsg("%02X. BP %04X:%04X\n",nr,bp->GetSegment(),bp->GetOffset());
@@ -1738,7 +1746,6 @@ Bit32u DEBUG_CheckKeys(void) {
 
 					// ensure all breakpoints are activated
 					CBreakpoint::ActivateBreakpoints();
-
 					skipDraw = true;
 					break;
 				}
@@ -2228,7 +2235,7 @@ void CDebugVar::InsertVariable(char* name, PhysPt adr)
 
 void CDebugVar::DeleteAll(void) 
 {
-	std::list<CDebugVar*>::iterator i;
+	std::vector<CDebugVar*>::iterator i;
 	CDebugVar* bp;
 	for(i=varList.begin(); i != varList.end(); i++) {
 		bp = static_cast<CDebugVar*>(*i);
@@ -2239,17 +2246,19 @@ void CDebugVar::DeleteAll(void)
 
 CDebugVar* CDebugVar::FindVar(PhysPt pt)
 {
-	std::list<CDebugVar*>::iterator i;
+	if (varList.empty()) return 0;
+
+	std::vector<CDebugVar*>::size_type s = varList.size();
 	CDebugVar* bp;
-	for(i=varList.begin(); i != varList.end(); i++) {
-		bp = static_cast<CDebugVar*>(*i);
-		if (bp->GetAdr()==pt) return bp;
+	for(std::vector<CDebugVar*>::size_type i = 0; i != s; i++) {
+		bp = static_cast<CDebugVar*>(varList[i]);
+		if (bp->GetAdr() == pt) return bp;
 	};
 	return 0;
 };
 
 bool CDebugVar::SaveVars(char* name) {
-	if (varList.size()>65535) return false;
+	if (varList.size() > 65535) return false;
 
 	FILE* f = fopen(name,"wb+");
 	if (!f) return false;
@@ -2258,7 +2267,7 @@ bool CDebugVar::SaveVars(char* name) {
 	Bit16u num = (Bit16u)varList.size();
 	fwrite(&num,1,sizeof(num),f);
 
-	std::list<CDebugVar*>::iterator i;
+	std::vector<CDebugVar*>::iterator i;
 	CDebugVar* bp;
 	for(i=varList.begin(); i != varList.end(); i++) {
 		bp = static_cast<CDebugVar*>(*i);
@@ -2279,10 +2288,10 @@ bool CDebugVar::LoadVars(char* name)
 
 	// read number of vars
 	Bit16u num;
-	if (fread(&num,sizeof(num),1,f) != 1) {
+	if (fread(&num,sizeof(num),1,f) != 1){
 		fclose(f);
 		return false;
-	}
+	} 
 
 	for (Bit16u i=0; i<num; i++) {
 		char name[16];
@@ -2371,33 +2380,46 @@ static void OutputVecTable(char* filename) {
 static void DrawVariables(void) {
 	if (CDebugVar::varList.empty()) return;
 
-	std::list<CDebugVar*>::iterator i;
 	CDebugVar *dv;
 	char buffer[DEBUG_VAR_BUF_LEN];
+	std::vector<CDebugVar*>::size_type s = CDebugVar::varList.size();
+	bool windowchanges = false;
 
-	int idx = 0;
-	for(i=CDebugVar::varList.begin(); i != CDebugVar::varList.end(); i++, idx++) {
+	for(std::vector<CDebugVar*>::size_type i = 0; i != s; i++) {
 
-		if (idx == 4*3) {
+		if (i == 4*3) {
 			/* too many variables */
 			break;
 		}
 
-		dv = static_cast<CDebugVar*>(*i);
-
+		dv = static_cast<CDebugVar*>(CDebugVar::varList[i]);
 		Bit16u value;
-		if (mem_readw_checked(dv->GetAdr(),&value))
+		bool varchanges = false;
+		bool has_no_value = mem_readw_checked(dv->GetAdr(),&value);
+		if (has_no_value) {
 			snprintf(buffer,DEBUG_VAR_BUF_LEN, "%s", "??????");
-		else
-			snprintf(buffer,DEBUG_VAR_BUF_LEN, "0x%04x", value);
+			dv->SetValue(false,0);
+			varchanges = true;
+		} else {
+			if ( dv->HasValue() && dv->GetValue() == value) {
+				; //It already had a value and it didn't change (most likely case)
+			} else {
+				dv->SetValue(true,value);
+				snprintf(buffer,DEBUG_VAR_BUF_LEN, "0x%04x", value);
+				varchanges = true;
+			}
+		}
 
-		int y = idx / 3;
-		int x = (idx % 3) * 26;
-		mvwprintw(dbg.win_var, y, x, dv->GetName());
-		mvwprintw(dbg.win_var, y,  (x + DEBUG_VAR_BUF_LEN + 1) , buffer);
+		if (varchanges) {
+			int y = i / 3;
+			int x = (i % 3) * 26;
+			mvwprintw(dbg.win_var, y, x, dv->GetName());
+			mvwprintw(dbg.win_var, y,  (x + DEBUG_VAR_BUF_LEN + 1) , buffer);
+			windowchanges = true; //Something has changed in this window
+		}
 	}
 
-	wrefresh(dbg.win_var);
+	if (windowchanges) wrefresh(dbg.win_var);
 };
 #undef DEBUG_VAR_BUF_LEN
 // HEAVY DEBUGGING STUFF
