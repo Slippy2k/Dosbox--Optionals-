@@ -141,9 +141,13 @@ Config File wil be created in the Directory where Dosbox.exe is. Config will be 
 Changelog SVN
 r4007 -> r4101 
 r4101 Slight corrections to r4091, CX and DX should not be changed for floppies. Changing reported floppy type to one without changeline as we don't support that call.
+
 r4100 Strip spaces properly. Fixes bug #480
+
 r4099 Correct extension, so that the .h file is part of the source package as well
+
 r4098 Flag handling (mostly undocumented behavior) for normal core: overflow flag for divide instructions, zero and sign flags for integer multiply instructions. Fixes A320 Airbus and Perfect General.
+
 r4097 ANSI emulation is activated for the session when an escape sequence is encountered other than those used by internal messages. Fixes LucasArts setup programs (Bug #458) provided that ANSI emulation is not activated. Compatible scroll fill for ANSI emulation.
 r4096 Support rarely used FCB feature: open file with search mask. Fixes Buckaroo Banzai.
 r4095 Allow 15/16/32 bpp inputs to the opengl output
