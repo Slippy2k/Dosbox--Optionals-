@@ -184,7 +184,7 @@ public:
 			fullconf.erase(fullconf.find("delaysysex"));
 			LOG_MSG("MIDI: Using delayed SysEx processing");
 		}
-		fullconf.erase(std::remove(fullconf.begin(), fullconf.end(), ' '), fullconf.end());	//remove all spaces
+		trim(fullconf);//remove all spaces
 		const char * conf = fullconf.c_str();
 		midi.status=0x00;
 		midi.cmd_pos=0;

@@ -561,43 +561,54 @@ Bitu GFX_GetBestMode(Bitu flags) {
 	/* For simplicity, with SDL 2.0 we accept
 	the desktop's color depth only for now */
 	switch (sdl.desktop.want_type) {
-	case SCREEN_SURFACE:
-	case SCREEN_TEXTURE:
+	
+		case SCREEN_SURFACE:
+			//We only accept 32bit output from the scalers here
+			//Can't handle true color inputs
+			if (flags & GFX_RGBONLY || !(flags&GFX_CAN_32)) goto check_surface;
+				flags|=GFX_SCALING;
+				flags&=~(GFX_CAN_8|GFX_CAN_15|GFX_CAN_16);
+			break;	
+		
+		case SCREEN_TEXTURE:
+	
 check_surface:
-		flags &= ~GFX_LOVE_8;		//Disable love for 8bpp modes
-		/* If we can't get our favorite mode check for another working one */
-		switch (sdl.desktop.bpp)
-		{
-		case 8:
-			if (flags & GFX_CAN_8) flags&=~(GFX_CAN_15|GFX_CAN_16|GFX_CAN_32);
+			flags &= ~GFX_LOVE_8;		//Disable love for 8bpp modes
+			/* If we can't get our favorite mode check for another working one */
+			switch (sdl.desktop.bpp)
+			{
+			case 8:
+				if (flags & GFX_CAN_8) flags&=~(GFX_CAN_15|GFX_CAN_16|GFX_CAN_32);
+				break;
+			case 15:
+				if (flags & GFX_CAN_15) flags&=~(GFX_CAN_8|GFX_CAN_16|GFX_CAN_32);
+				break;
+			case 16:
+				if (flags & GFX_CAN_16) flags&=~(GFX_CAN_8|GFX_CAN_15|GFX_CAN_32);
+				break;
+			case 24:
+			case 32:
+				if (flags & GFX_CAN_32) flags&=~(GFX_CAN_8|GFX_CAN_15|GFX_CAN_16);
+				break;
+			}
+			if (sdl.desktop.want_type == SCREEN_TEXTURE)
+				flags |= GFX_SCALING; // We want texture...
+			else	// Or we want/FORCE surface (e.g. for most scalers)
+				flags |= GFX_CAN_RANDOM;
 			break;
-		case 15:
-			if (flags & GFX_CAN_15) flags&=~(GFX_CAN_8|GFX_CAN_16|GFX_CAN_32);
+	
+	#if C_OPENGL
+		case SCREEN_OPENGL:
+		//We only accept 32bit output from the scalers here
+		if (!(flags&GFX_CAN_32)) goto check_surface;
+			flags|=GFX_SCALING;
+			flags&=~(GFX_CAN_8|GFX_CAN_15|GFX_CAN_16);
 			break;
-		case 16:
-			if (flags & GFX_CAN_16) flags&=~(GFX_CAN_8|GFX_CAN_15|GFX_CAN_32);
-			break;
-		case 24:
-		case 32:
-			if (flags & GFX_CAN_32) flags&=~(GFX_CAN_8|GFX_CAN_15|GFX_CAN_16);
+	#endif
+		default:
+			goto check_surface;
 			break;
 		}
-		if (sdl.desktop.want_type == SCREEN_TEXTURE)
-			flags |= GFX_SCALING; // We want texture...
-		else	// Or we want/FORCE surface (e.g. for most scalers)
-			flags |= GFX_CAN_RANDOM;
-		break;
-#if C_OPENGL
-	case SCREEN_OPENGL:
-		if (flags & GFX_RGBONLY || !(flags&GFX_CAN_32)) goto check_surface; // BGRA otherwise
-		flags|=GFX_SCALING;
-		flags&=~(GFX_CAN_8|GFX_CAN_15|GFX_CAN_16);
-		break;
-#endif
-	default:
-		goto check_surface;
-		break;
-	}
 	return flags;
 }
 
@@ -1168,7 +1179,8 @@ dosurface:
 			}
 		}		
 		
-		if (!(flags & GFX_CAN_32) || (flags & GFX_RGBONLY)) {
+		if (!(flags&GFX_CAN_32)) {
+			//We only accept 32bit output from the scalers here
 			//goto dosurface; // BGRA otherwise
 		}
 		int texsize=2 << int_log2(width > height ? width : height);

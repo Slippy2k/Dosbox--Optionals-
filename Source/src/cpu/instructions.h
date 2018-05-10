@@ -788,12 +788,15 @@
 	if (quo!=(Bit64s)quo32s) EXCEPTION(0);					\
 	reg_edx=rem;											\
 	reg_eax=quo32s;											\
+	SETFLAGBIT(OF,false);									\
 }
 
 #define IMULB(op1,load,save)								\
 {															\
 	reg_ax=((Bit8s)reg_al) * ((Bit8s)(load(op1)));			\
 	FillFlagsNoCFOF();										\
+	SETFLAGBIT(ZF,reg_al == 0);								\
+	SETFLAGBIT(SF,reg_al & 0x80);							\
 	if ((reg_ax & 0xff80)==0xff80 ||						\
 		(reg_ax & 0xff80)==0x0000) {						\
 		SETFLAGBIT(CF,false);SETFLAGBIT(OF,false);			\
@@ -809,6 +812,8 @@
 	reg_ax=(Bit16s)(temps);									\
 	reg_dx=(Bit16s)(temps >> 16);							\
 	FillFlagsNoCFOF();										\
+	SETFLAGBIT(ZF,reg_ax == 0);								\
+	SETFLAGBIT(SF,reg_ax & 0x8000);							\
 	if (((temps & 0xffff8000)==0xffff8000 ||				\
 		(temps & 0xffff8000)==0x0000)) {					\
 		SETFLAGBIT(CF,false);SETFLAGBIT(OF,false);			\
@@ -824,6 +829,8 @@
 	reg_eax=(Bit32u)(temps);								\
 	reg_edx=(Bit32u)(temps >> 32);							\
 	FillFlagsNoCFOF();										\
+	SETFLAGBIT(ZF,reg_eax == 0);							\
+	SETFLAGBIT(SF,reg_eax & 0x80000000);					\
 	if ((reg_edx==0xffffffff) &&							\
 		(reg_eax & 0x80000000) ) {							\
 		SETFLAGBIT(CF,false);SETFLAGBIT(OF,false);			\

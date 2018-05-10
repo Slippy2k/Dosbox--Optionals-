@@ -517,9 +517,8 @@ void DOSBOX_Init(void) {
 						  "                           reads the modelist into. DOSBox's normal modelist is too long and the\n"
 			              "                           game will overrun the buffer and crash without this setting.\n"
 						  "Pyl (Software Mode)      ..Set a Value between 24 and 34\n"
-						  "I'm Include a tool from VesaLib Archiv, CHKVESA.COM. You can list the Resolution with this tool");						 
-		
-		
+						  "I'm Include a tool from VesaLib Archiv, CHKVESA.COM. You can list the Resolution with this tool");					  
+	
 		
 	secprop->AddInitFunction(&CALLBACK_Init);
 	secprop->AddInitFunction(&PIC_Init);//done
@@ -1180,6 +1179,7 @@ void DOSBOX_Init(void) {
 	Pbool->Set_help(        "================================================================================================\n"
 	                        "Enable ipx over UDP/IP emulation.");
 #endif
+
 //	secprop->AddInitFunction(&CREDITS_Init);
 
 	//TODO ?
