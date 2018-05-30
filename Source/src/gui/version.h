@@ -1,6 +1,6 @@
-/* ScummVM - Graphic Adventure Engine
+/* Dosbox
  *
- * ScummVM is the legal property of its developers, whose names
+ * Dosbox is the legal property of its developers, whose names
  * are too numerous to list here. Please refer to the COPYRIGHT
  * file distributed with this source distribution.
  *
@@ -20,8 +20,8 @@
  *
  */
 
-#define DOSBOXREVISION "r4108 (Optionals)"
-#define DOSBOXSVERSION "r4108"
+#define DOSBOXREVISION "r4109 (Optionals)"
+#define DOSBOXSVERSION "r4109"
 
 #define DOSBOXFEATSGFX "3DFX CGA-Extension "
 #define DOSBOXFEATSSND "MT32 SSI2001 M.A.M.E.-Sound Nuked-OPL3(v1.8)"
@@ -34,6 +34,6 @@ extern const char *gDosboxRevision;		// e.g. "r40xx"
 extern const char *gDosboxBuildDate;    // e.g. "2002-01-01"
 extern const char *gDosboxFullVersion;  // e.g. "DOSBox SVN r4036  (2002-01-01)"
 extern const char *gDOSBoxFeatures;		// e.g. "32Bit (DynamicX68) (Fpu Core X68)"
-extern const char *gDosboxCopyright;    // e.g. "Copyright 2002-2017 DOSBox Team"
+extern const char *gDosboxCopyright;    // e.g. "Copyright 2002-2018 DOSBox Team"
 extern const char *gDosboxTeamText;     // The Deafult Copyright Text
 
