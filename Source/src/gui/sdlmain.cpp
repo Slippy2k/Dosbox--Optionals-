@@ -2614,9 +2614,7 @@ void Config_Add_SDL() {
 
 	Pstring = sdl_sec->Add_path("mapperfile",Property::Changeable::Always,".\\DATA\\" MAPPERFILE);
 	Pstring->Set_help( "================================================================================================\n"
-	                   "File used to load/save the key/event mappings from. Resetmapper only works with the default value.");
-		
-	Pint = sdl_sec->Add_int("sensitivity",Property::Changeable::Always,100);	
+	                   "File used to load/save the key/event mappings from. Resetmapper only works with the default value.");		
 	
 	Pbool = sdl_sec->Add_bool("Dosbox Splash Activate",Property::Changeable::Always,true);	
 	Pbool->Set_help(   "================================================================================================\n"

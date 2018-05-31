@@ -1,3 +1,26 @@
+r4111 Ensure stat receives the correct path when base_path misses filesplit. Remove duplicate code.
+r4110 Be less specific about the jump instruction when identifying a video BIOS.
+r4109 Update Copyright Information
+r4108 Fix ExpandDot not caring about the size of the buffer. (vogons topic 59658)
+r4107 Fix comparison and a warning
+r4106 Take length in consideration before moving the echo off upwards.
+r4105 Fix echo off being written twice. Attempt to make the line endings in the generated autoexec.bat all DOS style line endings.
+r4104 Lock default label of HDD local drive mounts. Fixes label changing to the host drive label when resetting cache on the Windows platform.
+r4103 Only add return to buffer if it already contains data, which fixes extra return in generated autoexec.bat.
+r4102 Improve disk serial number DOS functions.
+r4101 Slight corrections to r4091, CX and DX should not be changed for floppies. Changing reported floppy type to one without changeline as we don't support that call.
+r4100 Strip spaces properly. Fixes bug #480
+r4099 Correct extension, so that the .h file is part of the source package as well
+r4098 Flag handling (mostly undocumented behavior) for normal core: overflow flag for divide instructions, zero and sign flags for integer multiply instructions. Fixes A320 Airbus and Perfect General.
+r4097 ANSI emulation is activated for the session when an escape sequence is encountered other than those used by internal messages. Fixes LucasArts setup programs (Bug #458) provided that ANSI emulation is not activated.
+r4096 Support rarely used FCB feature: open file with search mask. Fixes Buckaroo Banzai.
+r4095 Allow 15/16/32 bpp inputs to the opengl output
+r4094 slight refactoring, so that it is easier to correctly increase TICK_SHIFT above 16.
+r4093 Updated stereo before using it.
+r4092 Add 0xA0 (probably ;) ) and improve unhandled message reporting a bit.
+r4091 Add basic support for INT 13 call 15. Used by korean powerdolls to detect harddrive.
+r4090 Do we even use those timers ? Ticks are initted regardless. Please report problems! (helps with cpu usage on Macs)
+r4089 Limit amount of polls per second a bit on MAC OS X, as it was quite high otherwise.
 r4088 Convert variable stuff to vector (breakpoints one day as well)
 r4087 fix compilation on machines that have X11 libraries installed, but use an sdl without X11.
 r4086 Add some basic arm detection to configure for the raspberry and chromebook users

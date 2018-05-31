@@ -20,8 +20,8 @@
  *
  */
 
-#define DOSBOXREVISION "r4109 (Optionals)"
-#define DOSBOXSVERSION "r4109"
+#define DOSBOXREVISION "r4111 (Optionals)"
+#define DOSBOXSVERSION "r4111"
 
 #define DOSBOXFEATSGFX "3DFX CGA-Extension "
 #define DOSBOXFEATSSND "MT32 SSI2001 M.A.M.E.-Sound Nuked-OPL3(v1.8)"
