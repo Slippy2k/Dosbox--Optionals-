@@ -494,10 +494,10 @@ static Bitu DOS_21Handler(void) {
 			Bit8u drive=reg_dl;
 			if (!drive || reg_ah==0x1f) drive = DOS_GetDefaultDrive();
 			else drive--;
-			if (Drives[drive]) {
+			if (drive < DOS_DRIVES && Drives[drive] && !Drives[drive]->isRemovable()) {
 				reg_al = 0x00;
 				SegSet16(ds,dos.tables.dpb);
-				reg_bx = drive;//Faking only the first entry (that is the driveletter)
+				reg_bx = drive*5;//Faking the first entry (drive number) and media id
 				LOG(LOG_DOSMISC,LOG_ERROR)("Get drive parameter block.");
 			} else {
 				reg_al=0xff;
@@ -1118,13 +1118,7 @@ static Bitu DOS_21Handler(void) {
 			}	
 			reg_ch=0x08;	// IOCTL category: disk drive
 			reg_ax=0x440d;	// Generic block device request
-			if (DOS_IOCTL()) {
-				reg_ax=0;	// AX destroyed
-				CALLBACK_SCF(false);
-			} else {
-				reg_ax=dos.errorcode;
-				CALLBACK_SCF(true);
-			}
+			DOS_21Handler();
 			reg_cx=old_cx;			
 			break;
 		} 

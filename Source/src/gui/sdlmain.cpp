@@ -207,6 +207,7 @@ struct SDL_Block {
 		bool autoenable;
 		bool requestlock;
 		bool locked;
+		bool middlemouselock;
 		Bitu sensitivity;
 	} mouse;
 	SDL_Rect updateRects[1024];
@@ -472,7 +473,11 @@ void GFX_SetTitle(Bit32s cycles,Bits frameskip,bool paused){
 	
 
 	if(sdl.mouse.locked || mouselocked ){
-		strcat(title,"     (Ctrl-F10 Releases Mouse)");
+		if (sdl.mouse.middlemouselock == true ){
+			strcat(title,"     (Ctrl-F10/Middle MouseButton Release Mouse)");
+		} else {
+			strcat(title,"     (Ctrl-F10 Release Mouse)");
+		}
 	}
 	
 	if(CPU_FastForward){
@@ -1922,6 +1927,8 @@ static void GUI_StartUp(Section * sec) {
 		SDL_ShowCursor(SDL_ENABLE);
 		sdl.mouse.autolock=true;		
 	}
+	
+	sdl.mouse.middlemouselock=section->Get_bool("mmbutton");
 	sdl.mouse.sensitivity=section->Get_int("sensitivity");
 	std::string output=section->Get_string("output");
 
@@ -2218,40 +2225,43 @@ static void HandleMouseMotion(SDL_MouseMotionEvent * motion) {
 
 static void HandleMouseButton(SDL_MouseButtonEvent * button) {
 	switch (button->state) {
-	case SDL_PRESSED:
-		if (sdl.mouse.requestlock && !sdl.mouse.locked) {
-			GFX_CaptureMouse();
-			// Dont pass klick to mouse handler
+		case SDL_PRESSED:
+			if (sdl.mouse.requestlock && !sdl.mouse.locked) {
+				GFX_CaptureMouse();
+				// Dont pass klick to mouse handler
+				break;
+			}
+			if (!sdl.mouse.autoenable && sdl.mouse.autolock && button-> button == SDL_BUTTON_MIDDLE) {
+				GFX_CaptureMouse();
+				break;
+			}
+			switch (button->button) {
+				case SDL_BUTTON_LEFT:
+					Mouse_ButtonPressed(0);
+					break;
+				case SDL_BUTTON_RIGHT:
+					Mouse_ButtonPressed(1);
+					break;
+				case SDL_BUTTON_MIDDLE:	
+					if (sdl.mouse.middlemouselock == true){
+						GFX_CaptureMouse();
+					}
+					Mouse_ButtonPressed(2);
 			break;
-		}
-		if (!sdl.mouse.autoenable && sdl.mouse.autolock && button->button == SDL_BUTTON_MIDDLE) {
-			GFX_CaptureMouse();
+			}
 			break;
-		}
-		switch (button->button) {
-		case SDL_BUTTON_LEFT:
-			Mouse_ButtonPressed(0);
-			break;
-		case SDL_BUTTON_RIGHT:
-			Mouse_ButtonPressed(1);
-			break;
-		case SDL_BUTTON_MIDDLE:
-			Mouse_ButtonPressed(2);
-			break;
-		}
-		break;
-	case SDL_RELEASED:
-		switch (button->button) {
-		case SDL_BUTTON_LEFT:
-			Mouse_ButtonReleased(0);
-			break;
-		case SDL_BUTTON_RIGHT:
-			Mouse_ButtonReleased(1);
-			break;
-		case SDL_BUTTON_MIDDLE:
-			Mouse_ButtonReleased(2);
-			break;
-		}
+		case SDL_RELEASED:
+			switch (button->button) {
+				case SDL_BUTTON_LEFT:
+					Mouse_ButtonReleased(0);
+					break;
+				case SDL_BUTTON_RIGHT:
+					Mouse_ButtonReleased(1);
+					break;
+				case SDL_BUTTON_MIDDLE:
+				Mouse_ButtonReleased(2);
+					break;
+			}
 		break;
 	}
 }
@@ -2589,6 +2599,10 @@ void Config_Add_SDL() {
 	Pbool->Set_help(  "================================================================================================\n"
 	                  "Mouse will automatically lock, if you click on the screen. (Press CTRL-F10 to unlock)");
 
+	Pbool = sdl_sec->Add_bool("mmbutton",Property::Changeable::Always,true);
+	Pbool->Set_help(  "================================================================================================\n"
+	                  "If true, Release/Lock with Middle Mouse Button if you click on the screen.");
+					  
 	Pint = sdl_sec->Add_int("sensitivity",Property::Changeable::Always,100);
 	Pint->SetMinMax(1,1000);
 	Pint->Set_help(   "================================================================================================\n"
