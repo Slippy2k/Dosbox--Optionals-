@@ -63,7 +63,11 @@ static struct {
 	} dac;
 } tandy;
 
-static sn76496_device device(machine_config(), 0, 0, SOUND_CLOCK );
+static sn76496_device device_sn76496(machine_config(), 0, 0, SOUND_CLOCK );
+static ncr8496_device device_ncr8496(machine_config(), 0, 0, SOUND_CLOCK);
+
+static sn76496_base_device* activeDevice = &device_ncr8496;
+#define device (*activeDevice)
 
 
 static void SN76496Write(Bitu /*port*/,Bitu data,Bitu /*iolen*/) {
@@ -73,6 +77,8 @@ static void SN76496Write(Bitu /*port*/,Bitu data,Bitu /*iolen*/) {
 		tandy.enabled=true;
 	}
 	device.write(data);
+	
+//	LOG_MSG("3voice write %X at time %7.3f",data,PIC_FullIndex());	
 }
 
 static void SN76496Update(Bitu length) {
@@ -271,6 +277,10 @@ public:
 			enable_hw_tandy_dac=false;
 		}
 
+		//Select the correct tandy chip implementation
+		if (machine == MCH_PCJR) activeDevice = &device_sn76496;
+		else activeDevice = &device_ncr8496;
+		
 		real_writeb(0x40,0xd4,0x00);
 		if (IS_TANDY_ARCH) {
 			/* enable tandy sound if tandy=true/auto */

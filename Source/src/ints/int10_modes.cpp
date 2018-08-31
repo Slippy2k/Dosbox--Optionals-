@@ -1642,7 +1642,7 @@ dac_text16:
 	IO_Read(mono_mode ? 0x3ba : 0x3da);
 	IO_Write(0x3c0,0x20);
 	/* INT 10h bugfix: Before returning from INT 10h, make sure the VGA (DOSBOX-X)*/
-	IO_Read(mono_mode ? 0x3ba : 0x3da);
+	IO_Read(mono_mode ? 0x3ba : 0x3da); // Kukoo2 demo 
 
 	/* Load text mode font */
 	if (CurMode->type==M_TEXT) {
