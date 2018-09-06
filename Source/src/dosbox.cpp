@@ -534,7 +534,7 @@ void DOSBOX_Init(void) {
 
 	Pbool = secprop->Add_bool("aspect",Property::Changeable::Always,true);
 	Pbool->Set_help(    "================================================================================================\n"
-	                    "Do aspect correction, if your output method doesn't support scaling this can slow things down!.\n"
+	                    "Do aspect correction, if your output method doesn't support scaling this can slow things down!\n"
 	                    "Note: For 3DFX set to false");
 
 	Pmulti = secprop->Add_multi("scaler",Property::Changeable::Always," ");
