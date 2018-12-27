@@ -297,6 +297,8 @@ static void DSP_DMA_CallBack(DmaChannel * chan, DMAEvent event) {
 //			DSP_ChangeMode(MODE_DMA_MASKED);
 			LOG(LOG_SB,LOG_NORMAL)("DMA masked,stopping output, left %d",chan->currcnt);
 		}
+	} else if (event==DMA_TRANSFEREND) {
+		if (sb.mode==MODE_DMA) sb.mode=MODE_DMA_MASKED;		
 	} else if (event==DMA_UNMASKED) {
 		if (sb.mode==MODE_DMA_MASKED && sb.dma.mode!=DSP_DMA_NONE) {
 			DSP_ChangeMode(MODE_DMA);
@@ -536,6 +538,8 @@ static void GenerateDMASound(Bitu size) {
 				sb.dma.mode = DSP_DMA_NONE;
 			}
 			else {
+				//Copied this value as the count for the final single cycle
+				sb.dma.total = 0;				
 				LOG(LOG_SB, LOG_NORMAL)("Switch to Single cycle transfer begun");
 			}			
 			LOG(LOG_SB,LOG_NORMAL)("Single cycle transfer ended");
@@ -997,6 +1001,8 @@ static void DSP_DoCommand(void) {
 		DSP_SB2_ABOVE;
 		/* Set mode to single transfer so it ends with current block */
 		sb.dma.autoinit=false;		//Should stop itself
+		sb.dma.total = 0;			//This will cancel the switch to single cycle mode
+		//Should really have some sb.dma.autoexit variable since we don't support continue autoinit dsp commands		
 		break;
 	case 0xe0:	/* DSP Identification - SB2.0+ */
 		DSP_FlushData();

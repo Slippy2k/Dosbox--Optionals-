@@ -818,9 +818,36 @@ static SDL_Window * GFX_SetSDLWindowMode(Bit16u width, Bit16u height, bool fulls
 			SDL_DestroyWindow(sdl.window);
 		}				
 			
+		/*
+		Try Multimon
+		                 SDL_WINDOWPOS_UNDEFINED_DISPLAY(sdl.displayNumber),
+		                 SDL_WINDOWPOS_UNDEFINED_DISPLAY(sdl.displayNumber),		
+		*/
+		
+		// enumerate displays
+		// int displays = SDL_GetNumVideoDisplays();
+		//assert( displays > 1 );  // assume we have secondary monitor
+		
+		// get display bounds for all displays
+		
+		//SDL_Rect displayDimensions;
+		//SDL_GetDisplayBounds(sdl.displayNumber, &displayDimensions);
+		
+		// SDL_Rect displayBounds;
+		// for( int i = 0; i < displays; i++ ) {
+			// displayBounds.push_back( SDL_Rect() );
+			// SDL_GetDisplayBounds( sdl.displayNumber, &displayBounds.back() );
+		// }
+
+		// window of dimensions 500 * 500 offset 100 pixels on secondary monitor
+		// int x = displayBounds[ sdl.displayNumber ].x;
+		// int y = displayBounds[ sdl.displayNumber ].y;	
+		
+
+		
 		sdl.window = SDL_CreateWindow("",
-		                 SDL_WINDOWPOS_UNDEFINED_DISPLAY(sdl.displayNumber),
-		                 SDL_WINDOWPOS_UNDEFINED_DISPLAY(sdl.displayNumber),
+		                 SDL_WINDOWPOS_CENTERED_DISPLAY( sdl.displayNumber ),
+		                 SDL_WINDOWPOS_CENTERED_DISPLAY( sdl.displayNumber ),
 		                 width, height,
 		                 (fullscreen ? (sdl.desktop.full.display_res ? SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_WINDOW_FULLSCREEN) : 0)
 		                 | ((screenType == SCREEN_OPENGL) ? SDL_WINDOW_OPENGL : 0) | SDL_WINDOW_SHOWN| (sdl.desktop.borderless ? SDL_WINDOW_BORDERLESS : 0));
@@ -841,16 +868,15 @@ static SDL_Window * GFX_SetSDLWindowMode(Bit16u width, Bit16u height, bool fulls
 	 * On Android, desktop res is the only way.
 	 */
 	if (fullscreen) {
-			
-				// if      (fsflag == "standard")  { sdl.desktop.screenflag = SDL_WINDOW_FULLSCREEN;  }
-	// else if (fsflag == "exklusiv")  { sdl.desktop.screenflag = SDL_WINDOW_FULLSCREEN_DESKTOP;  }
 	
+		//fullscreen = false;
+		//sdl.desktop.fullscreen = false;	
 		if ( sdl.desktop.screenflag == SDL_WINDOW_FULLSCREEN ){
 				bool success = false;
-				int numMonitors = SDL_GetNumVideoDisplays();	
+				// int numMonitors = SDL_GetNumVideoDisplays();	
 				//int desktopIndex = SDL_GetWindowDisplayIndex(sdl.window);
-				LOG_MSG("SDL: Fullscreen Activ");
-				LOG_MSG("SDL: Monitors=%d, Current=%d",numMonitors,sdl.displayNumber);
+				// LOG_MSG("SDL: Fullscreen Activ");
+				// LOG_MSG("SDL: Monitors=%d, Current=%d",numMonitors,sdl.displayNumber);
 		
 				const int mode_count= SDL_GetNumDisplayModes( 0 );
 				for( int m= 0; m < mode_count; m++ )
@@ -865,12 +891,11 @@ static SDL_Window * GFX_SetSDLWindowMode(Bit16u width, Bit16u height, bool fulls
 					if( displayMode.w == int(width) && displayMode.h == int(height) && displayMode.refresh_rate == int(60) )
 					{
 						const int result= SDL_SetWindowDisplayMode( sdl.window, &displayMode );
-						//LOG_MSG("SDL: Fullscreen SDL_SetWindowDisplayMode %d,%d: Result = %d",displayMode.w,displayMode.h,result);
-						if( result == 0 )
+						if( result == 0 ){
 							success = true;
-							LOG_MSG("SDL: Using Fullscreen Resolution %dx%d",displayMode.w,displayMode.h);
 							SDL_SetWindowFullscreen(sdl.window,sdl.desktop.screenflag);
-						break;
+							return sdl.window;
+						}
 					}
 				}
 				
@@ -900,7 +925,6 @@ static SDL_Window * GFX_SetSDLWindowMode(Bit16u width, Bit16u height, bool fulls
 				SDL_SetWindowFullscreen(sdl.window, SDL_WINDOW_FULLSCREEN_DESKTOP);				
 		}
 	} else {
-		LOG_MSG("SDL: Fullscreen NonActiv");
 		SDL_SetWindowFullscreen(sdl.window, 0);
 		SDL_SetWindowSize(sdl.window, width, height);
 	}
@@ -1063,8 +1087,7 @@ GLfloat get_texture_y(GLfloat vertex_y, GLfloat video_y, GLfloat texture_y) {
 #endif
 
 Bitu GFX_SetSize(Bitu width,Bitu height,Bitu flags,double scalex,double scaley,GFX_CallBack_t callback) {
-	
-	LOG_MSG("SDL: GFX_SetSize");
+
 	Section_prop *section = static_cast<Section_prop *>(control->GetSection("render"));	
 	bool rDebug = section->Get_bool("debug");
 	
@@ -1358,12 +1381,12 @@ dosurface:
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
-		if (sdl.opengl.bilinear) {
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		} else {
+		if (!sdl.opengl.bilinear || ( (sdl.clip.h % height) == 0 && (sdl.clip.w % width) == 0) ) {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		} else {
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		}
 
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, texsize, texsize, 0, GL_BGRA, GL_UNSIGNED_BYTE, sdl.opengl.framebuf);
@@ -1775,8 +1798,6 @@ void GFX_UpdateDisplayDimensions(int width, int height) {
 }
 
 static void GUI_ShutDown(Section * /*sec*/) {
-	LOG_MSG("SDL: Exit");
-	
 	GFX_Stop();
 	
 	if (sdl.draw.callback)
@@ -1885,7 +1906,10 @@ static void GUI_StartUp(Section * sec) {
 	sdl.desktop.fullscreen=section->Get_bool("fullscreen");
 
 	/* Change the Fullscreenmode (Normal <-> Desktop Exklusiv)
+	   Set Default to  SDL_WINDOW_FULLSCREEN_DESKTOP
 	*/
+	
+	sdl.desktop.screenflag = SDL_WINDOW_FULLSCREEN_DESKTOP;
 	std::string fsflag=section->Get_string("fullscreenmode");	
 	if      (fsflag == "standard")  { sdl.desktop.screenflag = SDL_WINDOW_FULLSCREEN;  }
 	else if (fsflag == "exklusiv")  { sdl.desktop.screenflag = SDL_WINDOW_FULLSCREEN_DESKTOP;  }
@@ -1969,10 +1993,10 @@ static void GUI_StartUp(Section * sec) {
 
 	sdl.displayNumber=section->Get_int("display");
 	LOG_MSG("SDL: SDL_GetNumVideoDisplays %d", SDL_GetNumVideoDisplays());
-	// if ((sdl.displayNumber < 0) || (sdl.displayNumber >= SDL_GetNumVideoDisplays())) {
-		// sdl.displayNumber = 0;
-		// LOG_MSG("SDL: Display number out of bounds, switching back to 0");
-	// }
+	if ((sdl.displayNumber < 0) || (sdl.displayNumber >= SDL_GetNumVideoDisplays())) {
+		sdl.displayNumber = 0;
+		LOG_MSG("SDL: Display number out of bounds, switching back to 0");
+	}
 	sdl.desktop.full.display_res = sdl.desktop.full.fixed && (!sdl.desktop.full.width || !sdl.desktop.full.height);
 	if (sdl.desktop.full.display_res) {
 		GFX_ObtainDisplayDimensions();
@@ -2078,13 +2102,8 @@ static void GUI_StartUp(Section * sec) {
 		sdl.opengl.fragment_shader_src = fragment_shader_default_src;
 		std::string shader_filename=section->Get_string("gl.shader");
 		if (!shader_filename.empty()) {
-
-			//char current[MAX_PATH+1];
-			//GetCurrentDirectory(sizeof(current), current);
 		
 			std::string config_path;
-			//config_path = strncat(current, "\\",strlen(current+1)); 
-			//Cross::GetPlatformConfigDir(config_path); Obsolete, dont use hard App data Path
 			config_path = section->Get_string("gl.shpath");
 			std::string vertex_shader_path = config_path + CROSS_FILESPLIT + shader_filename + ".vert";
 			std::ifstream vertex_fstream(vertex_shader_path.c_str());
@@ -2148,23 +2167,20 @@ static void GUI_StartUp(Section * sec) {
 		}
 		GFX_Stop();
 		// SDL_SetWindowTitle(sdl.window,"DOSBox"); // VERSION is gone...
-
-	
-
 	
 	/* The endian part is intentionally disabled as somehow it produces correct
        results without according to rhoenie
     */
 
-	//#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-	//    Bit32u rmask = 0xff000000;
-	//    Bit32u gmask = 0x00ff0000;
-	//    Bit32u bmask = 0x0000ff00;
-	//#else
-		Bit32u rmask = 0x000000ff;
-		Bit32u gmask = 0x0000ff00;
-		Bit32u bmask = 0x00ff0000;
-	//#endif
+		//#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+		//    Bit32u rmask = 0xff000000;
+		//    Bit32u gmask = 0x00ff0000;
+		//    Bit32u bmask = 0x0000ff00;
+		//#else
+			Bit32u rmask = 0x000000ff;
+			Bit32u gmask = 0x0000ff00;
+			Bit32u bmask = 0x00ff0000;
+		//#endif
 
 	/* Please leave the Splash screen stuff in working order in DOSBox.
 	   We spend a lot of time making DOSBox.
@@ -2399,6 +2415,13 @@ bool GFX_IsFullscreen(void) {
 	#define DB_POLLSKIP 1
 #endif
 
+#if defined(LINUX)
+#define SDL_XORG_FIX 1
+#else
+#define SDL_XORG_FIX 0
+#endif
+
+
 void GFX_Events() {
 	//Don't poll too often. This can be heavy on the OS, especially Macs.
 	//In idle mode 3000-4000 polls are done per second without this check.
@@ -2422,8 +2445,21 @@ void GFX_Events() {
 	}
 #endif
 	while (SDL_PollEvent(&event)) {
+
+#if SDL_XORG_FIX
+		// Special code for broken SDL with Xorg 1.20.1, where pairs of inputfocus gain and loss events are generated
+		// when locking the mouse in windowed mode.
+		if (event.type == SDL_ACTIVEEVENT && event.active.state == SDL_APPINPUTFOCUS && event.active.gain == 0) {
+			SDL_Event test; //Check if the next event would undo this one.
+			if (SDL_PeepEvents(&test,1,SDL_PEEKEVENT,SDL_ACTIVEEVENTMASK) == 1 && test.active.state == SDL_APPINPUTFOCUS && test.active.gain == 1) {
+				// Skip both events.
+				SDL_PeepEvents(&test,1,SDL_GETEVENT,SDL_ACTIVEEVENTMASK);
+				continue;
+			}
+		}
+#endif
+	
 		if (event.type == SDL_QUIT) {			
-			LOG_MSG("Dosbox Quit ===============================================================");
 			throw(0);
 			break;	
 		}			
@@ -3218,7 +3254,8 @@ int main(int argc, char* argv[]) {
 			Cross::GetPlatformConfigName(config_file);
 			config_path += config_file;
 			if(control->PrintConfig(config_path.c_str())) {
-				LOG_MSG("CONFIG: Generating default configuration.\n        Writing it to %s\n",config_path.c_str());
+				LOG_MSG("CONFIG: Generating default configuration.\n"
+						"        Writing it to %s\n",config_path.c_str());
 				//Load them as well. Makes relative paths much easier
 				control->ParseConfigFile(config_path.c_str());
 			}
@@ -3227,9 +3264,12 @@ int main(int argc, char* argv[]) {
 
 	//Second parse -conf switches
 	while(control->cmdline->FindString("-conf",config_file,true)) {
-		if(!control->ParseConfigFile(config_file.c_str())) {
+		if (!control->ParseConfigFile(config_file.c_str())) {
 			// try to load it from the user directory
-			control->ParseConfigFile((config_path + config_file).c_str());
+			if (!control->ParseConfigFile((config_path + config_file).c_str())) {
+				LOG_MSG("CONFIG: Can't open specified config file:\n"
+						"        %s\n",config_file.c_str());
+			}
 		}
 	}
 	// if none found => parse localdir conf
@@ -3237,19 +3277,27 @@ int main(int argc, char* argv[]) {
 		
 #if defined (USERS_APPDATA)	&& defined(WIN32)			
 #else
-	// Data Path
-	config_path = current_working_path() + "\\";
-	control->ParseConfigFile((config_path + "DATA\\dosbox.conf").c_str());	
+		// Data Path
+		config_path = current_working_path() + "\\";
+		if (!control->ParseConfigFile((config_path + "DATA\\dosbox.conf").c_str())) {
+			
+			LOG_MSG("CONFIG: Can't open default config file:\n"
+					"        %s\n",(config_path + "DATA\\dosbox.conf").c_str());				
+		}
 #endif		
 		
 	} else if(!control->configfiles.size()){
 		
 #if defined (USERS_APPDATA)	&& defined(WIN32)			
-	control->ParseConfigFile("dosbox.conf");
+		control->ParseConfigFile("dosbox.conf");
 #else
-	// Dosbox Path
-	config_path = current_working_path() + "\\";
-	control->ParseConfigFile((config_path + "dosbox.conf").c_str());		
+		// Dosbox Root Path
+		config_path = current_working_path() + "\\";
+		if (!control->ParseConfigFile((config_path + "dosbox.conf").c_str())) {	
+			
+			LOG_MSG("CONFIG: Can't open default config file:\n"
+				"		 %s\n",(config_path + "dosbox.conf").c_str());				
+		}	
 #endif	
 	
 	} else if(!control->configfiles.size()){
