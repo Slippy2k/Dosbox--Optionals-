@@ -1,0 +1,64 @@
+celt/entcode.lo: celt/entcode.c config.h celt/entcode.h \
+ include/opus_types.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/lib/gcc/i686-w64-mingw32/7.2.0/include/stdint.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/stdint.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/crtdefs.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/_mingw.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/_mingw_mac.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/_mingw_secapi.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/vadefs.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/sdks/_mingw_directx.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/sdks/_mingw_ddk.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/lib/gcc/i686-w64-mingw32/7.2.0/include/stddef.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/stddef.h \
+ include/opus_defines.h include/opus_types.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/lib/gcc/i686-w64-mingw32/7.2.0/include-fixed/limits.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/lib/gcc/i686-w64-mingw32/7.2.0/include-fixed/syslimits.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/limits.h \
+ celt/ecintrin.h \
+ D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/math.h \
+ celt/arch.h
+
+config.h:
+
+celt/entcode.h:
+
+include/opus_types.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/lib/gcc/i686-w64-mingw32/7.2.0/include/stdint.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/stdint.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/crtdefs.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/_mingw.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/_mingw_mac.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/_mingw_secapi.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/vadefs.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/sdks/_mingw_directx.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/sdks/_mingw_ddk.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/lib/gcc/i686-w64-mingw32/7.2.0/include/stddef.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/stddef.h:
+
+include/opus_defines.h:
+
+include/opus_types.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/lib/gcc/i686-w64-mingw32/7.2.0/include-fixed/limits.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/lib/gcc/i686-w64-mingw32/7.2.0/include-fixed/syslimits.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/limits.h:
+
+celt/ecintrin.h:
+
+D:/System_Development/Msys32Bit_Dosbox/mingw32/i686-w64-mingw32/include/math.h:
+
+celt/arch.h:

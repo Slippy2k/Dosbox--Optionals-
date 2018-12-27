@@ -24,7 +24,7 @@
 #define DOSBOXSVERSION "r4178"
 
 #define DOSBOXFEATSGFX "3DFX CGA-Extension "
-#define DOSBOXFEATSSND "MT32 SSI2001 M.A.M.E.-Sound Nuked-OPL3(v1.8)"
+#define DOSBOXFEATSSND "MT32 SSI2001 M.A.M.E.-Sound Nuked-OPL3(v1.8)\n                   (dr)MP3 Decode (dr)FLAC Decode OGG-Vorbis Ogg-OPUS"
 
 extern const char *gDosboxDay;
 extern const char *gDosboxMonth;

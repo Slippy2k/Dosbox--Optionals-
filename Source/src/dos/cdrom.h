@@ -1,4 +1,14 @@
-/* Copyright (C) 2002-2018  The DOSBox Team This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+/*
+ *  Copyright (C) 2002-2018  The DOSBox Team
+
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
@@ -6,6 +16,7 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
+
 
 
 #ifndef __CDROM_INTERFACE__
@@ -24,12 +35,13 @@
 #include "SDL.h"
 #include "SDL_thread.h"
 
-#if defined(C_SDL_SOUND)
-#include "SDL_sound.h"
-#endif
+#include "../libs/decoders/SDL_sound.h"
 
 #define RAW_SECTOR_SIZE		2352
 #define COOKED_SECTOR_SIZE	2048
+#define AUDIO_DECODE_BUFFER_SIZE 16512
+// 16512 is 16384 + 128, enough for four 4KB decode audio chunks plus 128 bytes extra
+// which accomodate the leftovers from typically callbacks, which minimizes our wrap size.
 
 /** @name Frames / MSF Conversion Functions
  *  Conversion functions from frames to Minute/Second/Frames and vice versa
@@ -110,10 +122,17 @@ class CDROM_Interface_Image : public CDROM_Interface
 {
 private:
 	class TrackFile {
+	protected:
+		TrackFile(Bit16u chunkSize) : chunkSize(chunkSize) {}
 	public:
 		virtual bool read(Bit8u *buffer, int seek, int count) = 0;
+		virtual bool   seek(Bit32u offset) = 0;
+		virtual Bit16u decode(Bit8u *buffer) = 0;
+		virtual Bit32u getRate() = 0;
+		virtual Bit8u  getChannels() = 0;
 		virtual int getLength() = 0;
 		virtual ~TrackFile() { };
+		const Bit16u   chunkSize = 0;
 	};
 	
 	class BinaryFile : public TrackFile {
@@ -121,26 +140,32 @@ private:
 		BinaryFile(const char *filename, bool &error);
 		~BinaryFile();
 		bool read(Bit8u *buffer, int seek, int count);
+		bool   seek(Bit32u offset);
+		Bit16u decode(Bit8u *buffer);
+		Bit32u getRate() { return 44100; }
+		Bit8u  getChannels() { return 2; }
 		int getLength();
 	private:
 		BinaryFile();
 		std::ifstream *file;
 	};
 	
-#if defined(C_SDL_SOUND)
+
 	class AudioFile : public TrackFile {
 	public:
 		AudioFile(const char *filename, bool &error);
 		~AudioFile();
-		bool read(Bit8u *buffer, int seek, int count);
+		bool   read(Bit8u *buffer, int seek, int count) { return false; }
+		bool   seek(Bit32u offset);
+		Bit16u decode(Bit8u *buffer);
+		Bit32u getRate();
+		Bit8u  getChannels();
 		int getLength();
 	private:
 		AudioFile();
 		Sound_Sample *sample;
-		int lastCount;
-		int lastSeek;
 	};
-#endif
+
 
 	struct Track {
 		int number;
@@ -183,15 +208,21 @@ static	void	CDAudioCallBack(Bitu len);
 static  struct imagePlayer {
 		CDROM_Interface_Image *cd;
 		MixerChannel   *channel;
-		SDL_mutex 	*mutex;
-		Bit8u   buffer[8192];
-		int     bufLen;
-		int     currFrame;	
-		int     targetFrame;
+
+		Bit8u   buffer[AUDIO_DECODE_BUFFER_SIZE];
+		Bit32u  startFrame;
+		Bit32u  currFrame;
+		Bit32u  numFrames;
 		bool    isPlaying;
 		bool    isPaused;
 		bool    ctrlUsed;
 		TCtrl   ctrlData;
+		TrackFile* trackFile;
+		void     (MixerChannel::*addSamples) (Bitu, const Bit16s*);
+		Bit32u   playbackTotal;
+		int      playbackRemaining;
+		Bit16u   bufferPos;
+		Bit16u   bufferConsumed;
 	} player;
 	
 	void 	ClearTracks();
@@ -203,7 +234,7 @@ static  struct imagePlayer {
 	bool	GetCueKeyword(std::string &keyword, std::istream &in);
 	bool	GetCueFrame(int &frames, std::istream &in);
 	bool	GetCueString(std::string &str, std::istream &in);
-	bool	AddTrack(Track &curr, int &shift, int prestart, int &totalPregap, int currPregap);
+        bool	AddTrack(Track &curr, int &shift, int prestart, int &totalPregap, int currPregap, int frameFromCue);
 
 static	int	refCount;
 	std::vector<Track>	tracks;

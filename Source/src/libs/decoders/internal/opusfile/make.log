@@ -1,0 +1,13 @@
+make[5]: Verzeichnis „/src/dosbox/src/libs/decoders/internal/opusfile“ wird betreten
+make  all-am
+make[6]: Verzeichnis „/src/dosbox/src/libs/decoders/internal/opusfile“ wird betreten
+  CC       src/info.lo
+  CC       src/internal.lo
+  CC       src/opusfile.lo
+  CC       src/stream.lo
+  CC       src/libopusurl_la-http.lo
+  CC       src/libopusurl_la-internal.lo
+  CCLD     libopusfile.la
+  CCLD     libopusurl.la
+make[6]: Verzeichnis „/src/dosbox/src/libs/decoders/internal/opusfile“ wird verlassen
+make[5]: Verzeichnis „/src/dosbox/src/libs/decoders/internal/opusfile“ wird verlassen

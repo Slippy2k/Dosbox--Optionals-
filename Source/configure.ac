@@ -555,6 +555,8 @@ if test x$have_SDL_sound_h = xyes -a x$have_SDL_sound_init = xyes ; then
    fi
 else
   AC_MSG_WARN([Can't find libSDL_sound, libSDL_sound support disabled])
+  LIBS="-lSDL_sound $LIBS"
+  AC_DEFINE(C_SDL_SOUND,1)  
 fi
 
 dnl Check for mprotect. Needed for 64 bits linux 
@@ -645,6 +647,7 @@ src/ints/Makefile
 src/libs/Makefile
 src/libs/zmbv/Makefile
 src/libs/gui_tk/Makefile
+src/libs/decoders/Makefile
 src/misc/Makefile
 src/shell/Makefile
 src/platform/Makefile
