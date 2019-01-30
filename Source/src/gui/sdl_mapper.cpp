@@ -28,6 +28,7 @@
 
 #include "SDL.h"
 #include "SDL_thread.h"
+#include <SDL_endian.h>
 
 #include "dosbox.h"
 #include "video.h"
@@ -37,6 +38,7 @@
 #include "mapper.h"
 #include "setup.h"
 #include "pic.h"
+#include "control.h"
 
 enum {
 	CLR_BLACK=0,
@@ -282,7 +284,7 @@ void CEvent::DeActivateAll(void) {
 
 
 
-class CBindGroup {
+class CBindGroup {			
 public:
 	CBindGroup() {
 		bindgroups.push_back(this);
@@ -500,10 +502,10 @@ public:
 		if (axes_cap>axes) axes_cap=axes;
 		hats_cap=emulated_hats;
 		if (hats_cap>hats) hats_cap=hats;
-		LOG_MSG("SDL: Using joystick %s\n"
-		        "     Axes   : %d\n"
-				"     Buttons: %d\n"
-				"     Hat(s) : %d\n",SDL_JoystickNameForIndex(stick),axes,buttons,hats);
+		LOG_MSG("SDL : Using joystick %s\n"
+		        "      Axes    : %d\n"
+				"      Buttons : %d\n"
+				"      Hat(s)  : %d\n",SDL_JoystickNameForIndex(stick),axes,buttons,hats);
 	}
 	~CStickBindGroup() {
 		SDL_JoystickClose(sdl_joystick);
@@ -1448,6 +1450,7 @@ public:
 		case MK_home: 
 			key=SDL_SCANCODE_HOME; 
 			break;
+		/* Quit Dosbox Options			*/
 		case MK_WHDA:
 			key=SDL_SCANCODE_KP_MULTIPLY;
 			break;
@@ -1460,6 +1463,16 @@ public:
 		case MK_WHDD:
 			key=SDL_SCANCODE_KP_DIVIDE;
 			break;				
+		/* Volume Up Down Media Keys */
+		case MK_ACVM:
+			key=SDL_SCANCODE_MUTE;
+			break;	
+		case MK_ACVD:
+			key=SDL_SCANCODE_VOLUMEDOWN;
+			break;	
+		case MK_ACVU:
+			key=SDL_SCANCODE_VOLUMEUP;
+			break;			
 		}
 		sprintf(buf,"%s \"key %d%s%s%s\"",
 			entry,
@@ -1724,8 +1737,15 @@ static void CreateLayout(void) {
 	AddKeyButtonEvent(PX(XO+1),PY(YO+3),BW,BH,"2","kp_2",KBD_kp2);
 	AddKeyButtonEvent(PX(XO+2),PY(YO+3),BW,BH,"3","kp_3",KBD_kp3);
 	AddKeyButtonEvent(PX(XO+3),PY(YO+3),BW,BH*2,"ENT","kp_enter",KBD_kpenter);
-	AddKeyButtonEvent(PX(XO),PY(YO+4),BW*2,BH,"0","kp_0",KBD_kp0);
+	AddKeyButtonEvent(PX(XO),PY(YO+4),BW*2,BH,"0","kp_0",KBD_kp0);	
 	AddKeyButtonEvent(PX(XO+2),PY(YO+4),BW,BH,".","kp_period",KBD_kpperiod);
+#undef XO
+#undef YO
+#define XO 5
+#define YO 7	
+	AddKeyButtonEvent(PX(XO),PY(YO),BW+90,BH,"Media Vol. Mute","audiomute",KBD_audiomute);
+	AddKeyButtonEvent(PX(XO),PY(YO+1),BW+90,BH,"Media Volume -","volumedown",KBD_volumedown);
+	AddKeyButtonEvent(PX(XO),PY(YO+2),BW+90,BH,"Media Volume +","volumeup",KBD_volumeup);	
 #undef XO
 #undef YO
 #define XO 10
@@ -1829,6 +1849,8 @@ static void CreateLayout(void) {
 	AddModButton(PX(0),PY(14),50,20,"Mod1",1);
 	AddModButton(PX(2),PY(14),50,20,"Mod2",2);
 	AddModButton(PX(4),PY(14),50,20,"Mod3",3);
+	
+		// AddKeyButtonEvent(PX(XO+2),PY(YO+1),BW,BH,"9","kp_9",KBD_kp9);
 	/* Create Handler buttons */
 	Bitu xpos=3;Bitu ypos=11;
 	for (CHandlerEventVector_it hit=handlergroup.begin();hit!=handlergroup.end();hit++) {
@@ -1884,7 +1906,7 @@ static void CreateStringBind(char * line) {
 			goto foundevent;
 		}
 	}
-	LOG_MSG("SDL: Can't find matching event for %s",eventname);
+	LOG_MSG("SDL MAPPER:\nCan't find matching event for %s\n(File %s:, Line: %d)\n\n",eventname,__FILE__,__LINE__);
 	return ;
 foundevent:
 	CBind * bind;
@@ -1947,6 +1969,10 @@ static struct {
 	{"lwindows",SDL_SCANCODE_LGUI},
 	{"rwindows",SDL_SCANCODE_RGUI},
 	{"rwinmenu",SDL_SCANCODE_MENU},
+	
+	{"audiomute",SDL_SCANCODE_AUDIOMUTE},
+	{"volumedown",SDL_SCANCODE_VOLUMEDOWN},	
+	{"volumeup",SDL_SCANCODE_VOLUMEUP},	
 	
 	{0,0}
 };
@@ -2012,11 +2038,46 @@ void MAPPER_AddHandler(MAPPER_Handler * handler,MapKeys key,Bitu mods,char const
 	new CHandlerEvent(tempname,handler,key,mods,buttonname);
 	return ;
 }
+/* //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+inline bool ExistsMapperFile (const std::string& name) {
+  struct stat buffer;   
+  return (stat (name.c_str(), &buffer) == 0); 
+}
 
+/* //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+std::string MapperSetFilePath(std::string sFile)
+{
+	
+	if ( sFile.empty() != 0 ){
+		return sFile;
+	}
+
+	std::string cTemp = "";
+	            cTemp = sFile[0];
+	
+	if (cTemp.compare(0,1,".") == 0){
+		sFile.erase (sFile.begin()); 
+	}	
+	if (cTemp.compare(0,1,"\\") == 0){
+		sFile.erase (sFile.begin()); 
+	}	
+	
+	return sFile;
+}
+
+/* //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 static void MAPPER_SaveBinds(void) {
-	FILE * savefile=fopen(mapper.filename.c_str(),"wt+");
+	
+	std::string MapFile = "";
+	MapFile = MapperSetFilePath(mapper.filename.c_str());	
+	
+	if (ExistsMapperFile( MapFile.c_str() )){
+			LOG_MSG("SDL : Saving Mapper Settings ...\n%s\n", MapFile.c_str());						
+	}	
+	
+	FILE * savefile=fopen(MapFile.c_str(),"wt+");
 	if (!savefile) {
-		LOG_MSG("SDL: Can't open %s for saving the mappings",mapper.filename.c_str());
+		LOG_MSG("SDL : Can't Save The mappings \n%s\n",MapFile.c_str());
 		return;
 	}
 	char buf[128];
@@ -2032,18 +2093,30 @@ static void MAPPER_SaveBinds(void) {
 		fprintf(savefile,"\n");
 	}
 	fclose(savefile);
-	change_action_text("Mapper file saved.",CLR_WHITE);
+	change_action_text("SDL : Ok, Mapper file saved ...",CLR_WHITE);
 }
+/* //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 
 static bool MAPPER_LoadBinds(void) {
-	FILE * loadfile=fopen(mapper.filename.c_str(),"rt");
+			
+	std::string MapFile = "";
+	MapFile = MapperSetFilePath(mapper.filename.c_str());		
+	
+	if (ExistsMapperFile( MapFile.c_str() )){
+			LOG_MSG("SDL : Loading Mapper Settings ...\n%s\n", MapFile.c_str());						
+	}
+	else{
+			LOG_MSG("SDL : Mapper File not Found \n%s\n", MapFile.c_str());
+			return false;
+	}
+	
+	FILE * loadfile=fopen(MapFile.c_str(),"rt");
 	if (!loadfile) return false;
 	char linein[512];
 	while (fgets(linein,512,loadfile)) {
 		CreateStringBind(linein);
 	}
 	fclose(loadfile);
-	LOG_MSG("SDL: Loading mapper settings\n%s\n", mapper.filename.c_str());
 	return true;
 }
 
@@ -2185,14 +2258,14 @@ static void InitializeJoysticks(void) {
 				if (first_usable) {
 					if (second_usable) {
 						joytype=JOY_2AXIS;
-						LOG_MSG("SDL: Two or more joysticks reported, initializing with 2axis");
+						LOG_MSG("SDL : Two or more joysticks reported, initializing with 2axis");
 					} else {
 						joytype=JOY_4AXIS;
-						LOG_MSG("SDL: One joystick reported, initializing with 4axis");
+						LOG_MSG("SDL : One joystick reported, initializing with 4axis");
 					}
 				} else if (second_usable) {
 					joytype=JOY_4AXIS_2;
-					LOG_MSG("SDL: One joystick reported, initializing with 4axis_2");
+					LOG_MSG("SDL : One joystick reported, initializing with 4axis_2");
 				}
 			} else if (mapper.sticks.num) {
 				// one joystick present; if it is acceptable use 4axis
@@ -2201,7 +2274,7 @@ static void InitializeJoysticks(void) {
 				if (tmp_stick1) {
 					if ((SDL_JoystickNumAxes(tmp_stick1)>0) || (SDL_JoystickNumButtons(tmp_stick1)>0)) {
 						joytype=JOY_4AXIS;
-						LOG_MSG("SDL: One joystick reported, initializing with 4axis");
+						LOG_MSG("SDL : One joystick reported, initializing with 4axis");
 					}
 				}
 			} else {

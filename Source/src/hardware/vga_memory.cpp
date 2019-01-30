@@ -865,6 +865,7 @@ void VGA_SetupHandlers(void) {
 		break;	
 	case M_LIN15:
 	case M_LIN16:
+	case M_LIN24:															/* <--- Custom S3 VGA */
 	case M_LIN32:
 #ifdef VGA_LFB_MAPPED
 		newHandler = &vgaph.map;

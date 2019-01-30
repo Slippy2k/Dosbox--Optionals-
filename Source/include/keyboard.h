@@ -45,6 +45,7 @@ enum KBD_KEYS {
 
 	KBD_lwindows,KBD_rwindows,KBD_rwinmenu,
 	
+	KBD_audiomute, KBD_volumedown, KBD_volumeup,
 	KBD_LAST
 };
 

@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <memory.h>
 
-#if C_DEBUG
+#if defined(C_DEBUG)
 #include <stdio.h>
 #include <stdarg.h>
 #endif
@@ -100,7 +100,7 @@ public:
 	}
 
 	void logerror(const char* format, ...) {
-#if C_DEBUG
+#if defined(C_DEBUG)
 		char buf[512*2];
 		va_list msg;
 		va_start(msg,format);

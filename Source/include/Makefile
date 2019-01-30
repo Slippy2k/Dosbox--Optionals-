@@ -174,7 +174,7 @@ INSTALL_SCRIPT = ${INSTALL}
 INSTALL_STRIP_PROGRAM = $(install_sh) -c -s
 LDFLAGS = -static -s
 LIBOBJS = 
-LIBS =  -L/mingw32/lib -lmingw32 -lglew32 -lSDL2_net -lSDL2main -lSDL2 -mwindows -Wl,--no-undefined -lm -ldinput8 -ldxguid -ldxerr8 -luser32 -lgdi32 -lwinmm -limm32 -lole32 -loleaut32 -lshell32 -lversion -luuid -static-libgcc -liphlpapi -lpng -lz -lfluidsynth -lreadline -lncurses -L/mingw32/lib -lportaudio -ldsound -lsetupapi -luuid -lgthread-2.0 -lglib-2.0 -lws2_32 -lole32 -lwinmm -lshlwapi -lintl -lpcre -lsndfile -lFLAC -logg -lvorbis -lvorbisenc -lspeex -lpthread -liconv -lopengl32 -lwinmm
+LIBS = -lSDL_sound  -L/mingw32/lib -lmingw32 -lglew32 -lSDL2_net -lSDL2main -lSDL2 -mwindows -Wl,--no-undefined -lm -ldinput8 -ldxguid -ldxerr8 -luser32 -lgdi32 -lwinmm -limm32 -lole32 -loleaut32 -lshell32 -lversion -luuid -static-libgcc -liphlpapi -lpng -lz -lfluidsynth -lreadline -lncurses -L/mingw32/lib -lportaudio -ldsound -lsetupapi -luuid -lgthread-2.0 -lglib-2.0 -lws2_32 -lole32 -lwinmm -lshlwapi -lintl -lpcre -lsndfile -lFLAC -logg -lvorbis -lvorbisenc -lspeex -lpthread -liconv -lopengl32 -lwinmm
 LTLIBOBJS = 
 MAKEINFO = ${SHELL} /src/dosbox/missing makeinfo
 MKDIR_P = /usr/bin/mkdir -p
@@ -271,7 +271,6 @@ mapper.h \
 mem.h \
 midi.h \
 mixer.h \
-modules.h \
 mouse.h \
 paging.h \
 pci_bus.h \

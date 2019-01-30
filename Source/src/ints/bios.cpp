@@ -16,7 +16,7 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-
+#include <assert.h>
 #include "dosbox.h"
 #include "mem.h"
 #include "bios.h"
@@ -839,17 +839,17 @@ static Bitu INT15_Handler(void) {
 		}
 	case 0x87:	/* Copy extended memory */
 		{
-			bool enabled = MEM_A20_Enabled();
-			MEM_A20_Enable(true);
-			Bitu   bytes	= reg_cx * 2;
-			PhysPt data		= SegPhys(es)+reg_si;
-			PhysPt source	= (mem_readd(data+0x12) & 0x00FFFFFF) + (mem_readb(data+0x16)<<24);
-			PhysPt dest		= (mem_readd(data+0x1A) & 0x00FFFFFF) + (mem_readb(data+0x1E)<<24);
-			MEM_BlockCopy(dest,source,bytes);
-			reg_ax = 0x00;
-			MEM_A20_Enable(enabled);
-			CALLBACK_SCF(false);
-			break;
+            bool enabled = MEM_A20_Enabled();
+            MEM_A20_Enable(true);
+            Bitu   bytes    = reg_cx * 2u;
+            PhysPt data     = SegPhys(es)+reg_si;
+            PhysPt source   = (mem_readd(data+0x12u) & 0x00FFFFFFu) + ((unsigned int)mem_readb(data+0x17u)<<24u); /* DOSBox.X */
+            PhysPt dest     = (mem_readd(data+0x1Au) & 0x00FFFFFFu) + ((unsigned int)mem_readb(data+0x1Fu)<<24u); /* DOSBox.X */
+            MEM_BlockCopy(dest,source,bytes);
+            reg_ax = 0x00;
+            MEM_A20_Enable(enabled);
+            CALLBACK_SCF(false);
+            break;
 		}	
 	case 0x88:	/* SYSTEM - GET EXTENDED MEMORY SIZE (286+) */
 		reg_ax=other_memsystems?0:size_extended;
@@ -872,8 +872,17 @@ static Bitu INT15_Handler(void) {
 			CPU_SetFlags(0,FMASK_ALL);
 			reg_ax=0;
 			CPU_JMP(false,0x30,reg_cx,0);
-		}
+		}		
 		break;
+    case 0x8A:  /* EXTENDED MEMORY SIZE */
+        {
+            Bitu sz = MEM_TotalPages()*4;
+            if (sz >= 1024) sz -= 1024;
+            else sz = 0;
+            reg_ax = sz & 0xFFFF;
+            reg_dx = sz >> 16;
+            CALLBACK_SCF(false);
+        }		
 	case 0x90:	/* OS HOOK - DEVICE BUSY */
 		CALLBACK_SCF(false);
 		reg_ah=0;
@@ -948,20 +957,82 @@ static Bitu INT15_Handler(void) {
 		LOG(LOG_BIOS,LOG_NORMAL)("INT15:Function %X called, bios mouse not supported",reg_ah);
 		CALLBACK_SCF(true);
 		break;
+    //case 0x53: // APM BIOS		
 	case 0xe8:
 		switch (reg_al) {
 		case 0x01: { /* E801: memory size */
 			    Bitu sz = MEM_TotalPages()*4;
-			    if (sz >= 1024) sz -= 1024;
-			    else sz = 0;
-			    reg_ax = reg_cx = (sz > 0x3C00) ? 0x3C00 : sz; /* extended memory between 1MB and 16MB in KBs */
-			    sz -= reg_ax;
-			    sz /= 64;	/* extended memory size from 16MB in 64KB blocks */
-			    if (sz > 65535) sz = 65535;
+			    if (sz >= 1024)
+				{
+					sz -= 1024;
+				}
+			    else
+				{
+					sz = 0;
+				}
+			    
+				reg_ax = reg_cx = (sz > 0x3C00) ? 0x3C00 : sz; /* extended memory between 1MB and 16MB in KBs */
+			    sz    -= reg_ax;
+			    sz    /= 64;	/* extended memory size from 16MB in 64KB blocks */
+			    
+				if (sz > 65535)
+				{
+					sz = 65535;
+				}
 			    reg_bx = reg_dx = sz;
 			    CALLBACK_SCF(false);
 			}
 			break;
+			/* **************** DOSBOX-X ***************************************************************************/
+			case 0x20:  /* E820: MEMORY LISTING */
+			{
+				if (reg_edx == 0x534D4150 && reg_ecx >= 20 && (MEM_TotalPages()*4) >= 24000) {
+                /* return a minimalist list:
+                 *
+                 *    0) 0x000000-0x09EFFF       Free memory
+                 *    1) 0x0C0000-0x0FFFFF       Reserved
+                 *    2) 0x100000-...            Free memory (no ACPI tables) */
+					if (reg_ebx < 3) {
+						uint32_t base,len,type;
+                        Bitu seg = SegValue(es);
+
+                        assert((MEM_TotalPages()*4096) >= 0x100000);
+
+                        switch (reg_ebx)
+						{
+							case 0: base=0x000000; len=0x09F000; type=1; break;
+                            case 1: base=0x0C0000; len=0x040000; type=2; break;
+                            case 2: base=0x100000; len=(MEM_TotalPages()*4096)-0x100000; type=1; break;
+                            default: E_Exit("Despite checks EBX is wrong value"); /* BUG! */
+						};
+
+                        /* write to ES:DI */
+                        real_writed(seg,reg_di+0x00,base);
+                        real_writed(seg,reg_di+0x04,0);
+                        real_writed(seg,reg_di+0x08,len);
+                        real_writed(seg,reg_di+0x0C,0);
+                        real_writed(seg,reg_di+0x10,type);
+                        reg_ecx = 20;
+
+                        /* return EBX pointing to next entry. wrap around, as most BIOSes do.
+                         * the program is supposed to stop on CF=1 or when we return EBX == 0 */
+                        if (++reg_ebx >= 3) reg_ebx = 0;
+                   }
+                   else
+				   {
+						CALLBACK_SCF(true);
+                   }
+
+                   reg_eax = 0x534D4150;
+				}
+                else
+				{
+					reg_eax = 0x8600;
+                    CALLBACK_SCF(true);
+				}
+			}
+            break;	
+			/* **************** DOSBOX-X ***************************************************************************/
 		default:
 			LOG(LOG_BIOS,LOG_ERROR)("INT15:Unknown call %4X",reg_ax);
 			reg_ah=0x86;
@@ -991,7 +1062,7 @@ static Bitu Default_IRQ_Handler(void) {
 			IO_WriteB(0xa0,0x20);
 		} else IO_WriteB(0x21,IO_ReadB(0x21)|(master_isr&~4));
 		IO_WriteB(0x20,0x20);
-#if C_DEBUG
+#if defined(C_DEBUG)
 		Bit16u irq=0,isr=master_isr;
 		if (slave_isr) isr=slave_isr<<8;
 		while (isr>>=1) irq++;

@@ -416,12 +416,12 @@ void PCSPEAKER_SetCounter(Bitu cntr, Bitu mode) {
 		spkr.pit_max=(1000.0f/PIT_TICK_RATE)*cntr;
 		break;
 	default:
-#if C_DEBUG
-		LOG_MSG("PCSPEAKER: Unhandled speaker mode %d",mode);
+#if defined(C_DEBUG)
+		LOG_MSG("PCS: Unhandled Speaker Mode %d",mode);
 #endif
 #ifdef SPKR_DEBUGGING
 		if (PC_Speaker_Patch){	
-			LOG_MSG("PCSPEAKER: Unhandled speaker mode %d at %f", mode, PIC_FullIndex());
+			LOG_MSG("PCS: Unhandled Speaker Mode %d at %f", mode, PIC_FullIndex());
 		}
 #endif
 		return;
@@ -714,7 +714,7 @@ static void PCSPEAKER_CallBack(Bitu len) {
 		
 		#ifdef SPKR_DEBUGGING
 		if (spkr.used) {
-			LOG_MSG("PCSPEAKER_CallBack: DelayEntries not emptied (%u) at %f", spkr.used, PIC_FullIndex());
+			LOG_MSG("PCS: CallBack > DelayEntries Not Emptied (%u) at %f", spkr.used, PIC_FullIndex());
 		} 
 		#endif
 	}
@@ -722,7 +722,7 @@ static void PCSPEAKER_CallBack(Bitu len) {
 
 static void init_interpolation() {
 	sampled_impulse = new double[SPKR_FILTER_WIDTH];
-	if (sampled_impulse == NULL) E_Exit("memory allocation failed");
+	if (sampled_impulse == NULL) E_Exit("PC-Speaker: Memory Allocation Failed");
 	for (unsigned i = 0; i < SPKR_FILTER_WIDTH; i++) {
 		sampled_impulse[i] = impulse((double)i/(spkr.rate*SPKR_OVERSAMPLING));
 	}
@@ -732,12 +732,12 @@ static void init_interpolation() {
 	// +1 to compensate for rounding down of the division
 	output_buffer_length  = SPKR_FILTER_QUALITY + spkr.rate/1000 + 1;
 	output_buffer = new double[output_buffer_length];
-	if (output_buffer == NULL) E_Exit("memory allocation failed");
+	if (output_buffer == NULL) E_Exit("PC-Speaker: Memory Allocation Failed");
 	for (unsigned i = 0; i < output_buffer_length; i++) {
 		output_buffer[i] = 0.0;
 	}
 	// DEBUG
-	LOG_MSG("SPEAKER: Output Buffer Length: %u", output_buffer_length);
+	//LOG_MSG("PCS: Output Buffer Length: %u", output_buffer_length);
 }
 
 class PCSPEAKER:public Module_base {
@@ -754,14 +754,12 @@ public:
 		const char * pcmode = section->Get_string("pcspeaker.mode");
 		if (!strcasecmp(pcmode,"old")){
 			PC_Speaker_Patch=false;
+			LOG_MSG("PCS: PC-Speaker Mode Old (DOSBox Default)\n");
 		
 		}else if (!strcasecmp(pcmode,"new")){
 			PC_Speaker_Patch=true;
+			LOG_MSG("PCS: PC-Speaker Mode New\n");
 		}
-
-		if (PC_Speaker_Patch) {
-			LOG_MSG("SPEAKER: Emulations Mode - New - is on");
-		}	
 		
 		if (!PC_Speaker_Patch) {
 			spkr.mode=SPKR_OFF;

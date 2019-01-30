@@ -25,7 +25,7 @@ bool MidiHandler_mt32::Open(const char *conf) {
 	if (version < 0x020100) {
 		delete service;
 		service = NULL;
-		LOG_MSG("MIDI MT32: libmt32emu version is too old: %s", service->getLibraryVersionString());
+		LOG_MSG("MT32: libmt32emu version is too old: %s", service->getLibraryVersionString());
 		return false;
 	}
 	service->createContext(getReportHandlerInterface(), this);
@@ -39,7 +39,7 @@ bool MidiHandler_mt32::Open(const char *conf) {
 	if (romDirLen < 1) {
 		romDir = "./";
 	} else if (4080 < romDirLen) {
-		LOG_MSG("MIDI MT32: mt32.romdir is too long, using the current dir.");
+		LOG_MSG("MT32: mt32.romdir is too long, using the current dir.");
 		romDir = "./";
 	} else {
 		char lastChar = romDir[strlen(romDir) - 1];
@@ -54,7 +54,7 @@ bool MidiHandler_mt32::Open(const char *conf) {
 		if (MT32EMU_RC_ADDED_CONTROL_ROM != service->addROMFile(pathName)) {
 			delete service;
 			service = NULL;
-			LOG_MSG("MIDI MT32: Control ROM file not found");
+			LOG_MSG("MT32: Control ROM file not found");
 			return false;
 		}
 	}
@@ -64,7 +64,7 @@ bool MidiHandler_mt32::Open(const char *conf) {
 		if (MT32EMU_RC_ADDED_PCM_ROM != service->addROMFile(pathName)) {
 			delete service;
 			service = NULL;
-			LOG_MSG("MIDI MT32: PCM ROM file not found");
+			LOG_MSG("MT32: PCM ROM file not found");
 			return false;
 		}
 	}
@@ -78,7 +78,7 @@ bool MidiHandler_mt32::Open(const char *conf) {
 	if (MT32EMU_RC_OK != (rc = service->openSynth())) {
 		delete service;
 		service = NULL;
-		LOG_MSG("MIDI MT32: Error initialising emulation: %i", rc);
+		LOG_MSG("MT32: Error initialising emulation: %i", rc);
 		return false;
 	}
 
@@ -98,9 +98,9 @@ bool MidiHandler_mt32::Open(const char *conf) {
 	noise = section->Get_bool("mt32.verbose");
 	renderInThread = section->Get_bool("mt32.thread");
 
-	if (noise) LOG_MSG("MIDI MT32: Set maximum number of partials %d", service->getPartialCount());
+	if (noise) LOG_MSG("MT32: Set maximum number of partials %d", service->getPartialCount());
 
-	if (noise) LOG_MSG("MIDI MT32: Adding mixer channel at sample rate %d", sampleRate);
+	if (noise) LOG_MSG("MT32: Adding mixer channel at sample rate %d", sampleRate);
 	chan = MIXER_AddChannel(mixerCallBack, sampleRate, "MT32");
 
 	if (renderInThread) {
@@ -111,7 +111,7 @@ bool MidiHandler_mt32::Open(const char *conf) {
 		int latency = section->Get_int("mt32.prebuffer");
 		if (latency <= chunkSize) {
 			latency = 2 * chunkSize;
-			LOG_MSG("MIDI MT32: chunk length must be less than prebuffer length, prebuffer length reset to %i ms.", latency);
+			LOG_MSG("MT32: chunk length must be less than prebuffer length, prebuffer length reset to %i ms.", latency);
 		}
 		framesPerAudioBuffer = (latency * sampleRate) / MILLIS_PER_SECOND;
 		audioBufferSize = framesPerAudioBuffer << 1;
@@ -179,6 +179,11 @@ int MidiHandler_mt32::processingThread(void *) {
 	return 0;
 }
 
+inline bool fMT32FileRom (const std::string& name) {
+  struct stat buffer;   
+  return (stat (name.c_str(), &buffer) == 0); 
+}
+
 void MidiHandler_mt32::makeROMPathName(char pathName[], const char romDir[], const char fileName[], bool addPathSeparator) {
 	
 	strcpy(pathName, romDir);
@@ -191,7 +196,12 @@ void MidiHandler_mt32::makeROMPathName(char pathName[], const char romDir[], con
 
 	}
 	strcat(pathName, fileName);
-	LOG_MSG("MT32: Looking for ROM %s",pathName);	
+		//LOG_MSG("MT32: Looking for ROM %s",pathName);	
+	if (fMT32FileRom(pathName)){
+		LOG_MSG("MT32: .OK  ..... ROM [%s] *",pathName);			
+	}else{
+		LOG_MSG("MT32: .Not Found ROM [%s]",pathName);
+	}	
 }
 
 mt32emu_report_handler_i MidiHandler_mt32::getReportHandlerInterface() {
@@ -206,20 +216,20 @@ mt32emu_report_handler_i MidiHandler_mt32::getReportHandlerInterface() {
 			if (midiHandler_mt32.noise) {
 				char s[1024];
 				vsnprintf(s, 1023, fmt, list);
-				LOG_MSG("MIDI MT32: %s", s);
+				LOG_MSG("MT32: %s", s);
 			}
 		}
 
 		static void onErrorControlROM(void *) {
-			LOG_MSG("MIDI MT32: Couldn't open Control ROM file");
+			LOG_MSG("\nMT32 : Couldn't open Control ROM file\n");
 		}
 
 		static void onErrorPCMROM(void *) {
-			LOG_MSG("MIDI MT32: Couldn't open PCM ROM file");
+			LOG_MSG("\nMT32 : Couldn't open PCM ROM file\n");
 		}
 
 		static void showLCDMessage(void *, const char *message) {
-			LOG_MSG("MIDI MT32: LCD-Message: %s", message);
+			LOG_MSG("MT32: LCD-Message: %s", message);
 		}
 	};
 

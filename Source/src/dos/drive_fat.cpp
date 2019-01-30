@@ -736,7 +736,7 @@ fatDrive::fatDrive(const char *sysFilename, Bit32u bytesector, Bit32u cylsector,
 		for(m=0;m<4;m++) {
 			/* Pick the first available partition */
 			if(mbrData.pentry[m].partSize != 0x00) {
-				LOG_MSG("Using partition %d on drive; skipping %d sectors", m, mbrData.pentry[m].absSectStart);
+				LOG_MSG("HDD: Using Partition %d On Drive. Skip %d Sectors", m, mbrData.pentry[m].absSectStart);
 				startSector = mbrData.pentry[m].absSectStart;
 				break;
 			}
@@ -832,7 +832,7 @@ fatDrive::fatDrive(const char *sysFilename, Bit32u bytesector, Bit32u cylsector,
 /* DOSBox-MB IMGMAKE patch. ========================================================================= */		
 		/* FAT32 not implemented yet */
 		//created_successfully = false;
-		LOG_MSG("FAT type not supported, mounting image only");
+		LOG_MSG("HD: FAT32 not Really Supported, Mount Image Only\n");
 		fattype = FAT32;	// Avoid parsing dir entries, see fatDrive::FindFirst()...should work for unformatted images as well
 /* DOSBox-MB IMGMAKE patch. ========================================================================= */		
 		return;

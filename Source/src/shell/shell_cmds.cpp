@@ -1873,7 +1873,8 @@ void DOS_Shell::CMD_ADDKEY(char * args){
 				KBD_x, KBD_y, KBD_z, KBD_leftbracket|shiftflag, KBD_backslash|shiftflag, KBD_rightbracket|shiftflag, KBD_grave|shiftflag, 0,
 				0, KBD_f1, KBD_f2, KBD_f3, KBD_f4, KBD_f5, KBD_f6, KBD_f7, KBD_f8, KBD_f9, KBD_f10, KBD_f11, KBD_f12,
 				KBD_up, KBD_down, KBD_left, KBD_right, KBD_insert, KBD_delete, KBD_home, KBD_end, KBD_pageup, KBD_pagedown,
-				KBD_kp0, KBD_kp1, KBD_kp2, KBD_kp3, KBD_kp4, KBD_kp5, KBD_kp6, KBD_kp7, KBD_kp8, KBD_kp9, 
+				KBD_kp0, KBD_kp1, KBD_kp2, KBD_kp3, KBD_kp4, KBD_kp5, KBD_kp6, KBD_kp7, KBD_kp8, KBD_kp9,
+				KBD_audiomute, KBD_volumedown, KBD_volumeup,
 			};
 			scankey = (KBD_KEYS)(map[(unsigned char)word[0]] & ~shiftflag);
 			if (map[(unsigned char)word[0]] & shiftflag) shift = true;

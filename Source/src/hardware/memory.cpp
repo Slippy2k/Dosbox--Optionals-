@@ -29,7 +29,7 @@
 
 #define PAGES_IN_BLOCK	((1024*1024)/MEM_PAGE_SIZE)
 #define SAFE_MEMORY	32
-#define MAX_MEMORY	1024
+#define MAX_MEMORY	1025
 #define MAX_PAGE_ENTRIES (MAX_MEMORY*1024*1024/4096)
 #define LFB_PAGES	512
 #define MAX_LINKS	((MAX_MEMORY*1024/4)+4096)		//Hopefully enough
@@ -82,7 +82,7 @@ public:
 	IllegalPageHandler() { flags=PFLAG_INIT|PFLAG_NOCODE;
 	}
 	Bitu readb(PhysPt addr) {
-#if C_DEBUG
+#if defined(C_DEBUG)
 		LOG_MSG("Illegal read from %x, CS:IP %8x:%8x",addr,SegValue(cs),reg_eip);
 #else
 		static Bits lcount=0;
@@ -94,7 +94,7 @@ public:
 		return 0xff;
 	} 
 	void writeb(PhysPt addr,Bitu val) {
-#if C_DEBUG
+#if defined(C_DEBUG)
 		LOG_MSG("Illegal write to %x, CS:IP %8x:%8x",addr,SegValue(cs),reg_eip);
 #else
 		static Bits lcount=0;
@@ -609,12 +609,12 @@ public:
 					"     Above %d MB are NOT recommended.",memsize,SAFE_MEMORY - 1);
 			LOG_MSG("MEM: Stick with the default values unless you are absolutely certain.\n");
 		}
-		MemBase = new(std::nothrow) Bit8u[memsize*1024*1024];
+		MemBase = new(std::nothrow) Bit8u[memsize*1024ul*1024ul];
 		if (!MemBase) E_Exit("Can't allocate main memory of %d MB",memsize);
 		/* Clear the memory, as new doesn't always give zeroed memory
 		 * (Visual C debug mode). We want zeroed memory though. */
-		memset((void*)MemBase,0,memsize*1024*1024);
-		memory.pages = (memsize*1024*1024)/4096;
+		memset((void*)MemBase,0,memsize*1024ul*1024ul);
+		memory.pages = (memsize*1024ul*1024ul)/4096ul;
 		/* Allocate the data for the different page information blocks */
 		memory.phandlers=new  PageHandler * [memory.pages];
 		memory.mhandles=new MemHandle [memory.pages];

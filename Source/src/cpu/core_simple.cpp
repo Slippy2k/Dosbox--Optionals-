@@ -17,7 +17,7 @@
  */
 
 #include <stdio.h>
-
+#include <string.h>
 #include "dosbox.h"
 #include "mem.h"
 #include "cpu.h"
@@ -27,7 +27,7 @@
 #include "pic.h"
 #include "fpu.h"
 
-#if C_DEBUG
+#if defined(C_DEBUG)
 #include "debug.h"
 #endif
 
@@ -141,8 +141,8 @@ Bits CPU_Core_Simple_Run(void) {
 		BaseDS=SegBase(ds);
 		BaseSS=SegBase(ss);
 		core.base_val_ds=ds;
-#if C_DEBUG
-#if C_HEAVY_DEBUG
+#if defined(C_DEBUG)
+#if defined(C_HEAVY_DEBUG)
 		if (DEBUG_HeavyIsBreakpoint()) {
 			FillFlags();
 			return debugCallback;
@@ -159,7 +159,7 @@ restart_opcode:
 		#include "core_normal/prefix_66_0f.h"
 		default:
 		illegal_opcode:
-#if C_DEBUG	
+#if defined(C_DEBUG)	
 			{
 				Bitu len=(GETIP-reg_eip);
 				LOADIP;
@@ -169,7 +169,12 @@ restart_opcode:
 //					sprintf(writecode,"%X",mem_readb(core.cseip++));
 					writecode+=2;
 				}
-				LOG(LOG_CPU,LOG_NORMAL)("Illegal/Unhandled opcode %s",tempcode);
+				/* Reduziert die Ausgabe in Windows Mode. Opcode 63 ist immer
+				 * Illegal/Unhandled
+				*/
+				if (strcmp(tempcode,"63") != 0){
+					LOG(LOG_CPU,LOG_NORMAL)("Illegal/Unhandled opcode %s",tempcode);
+				}
 			}
 #endif
 			CPU_Exception(6,0);

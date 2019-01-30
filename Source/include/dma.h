@@ -39,6 +39,10 @@ public:
 	Bit16u currcnt;
 	Bit8u channum;
 	Bit8u pagenum;
+	/// Taken from Dosbox-X ///////////////////////////////////////////////////////
+	Bit8u DMA16_PAGESHIFT;
+    Bit32u DMA16_ADDRMASK;
+	/// Taken from Dosbox-X ///////////////////////////////////////////////////////	
 	Bit8u DMA16;
 	bool increment;
 	bool autoinit;

@@ -23,6 +23,7 @@
 #include "SDL.h"
 #include "SDL2\SDL_opengl.h"
 #include "SDL2\SDL_opengl_glext.h"
+#include "SDL2\GL\glcorearb.h"
 
 
 /* opengl extensions */
@@ -53,9 +54,11 @@ extern PFNGLDELETEOBJECTARBPROC glDeleteObjectARB;
 extern PFNGLGETOBJECTPARAMETERIVARBPROC glGetObjectParameterivARB;
 extern PFNGLGETINFOLOGARBPROC glGetInfoLogARB;
 extern PFNGLBLENDFUNCSEPARATEEXTPROC glBlendFuncSeparateExt;
-extern PFNGLGENERATEMIPMAPEXTPROC glGenerateMipmapExt;
+extern PFNGLGENERATEMIPMAPEXTPROC glGenerateMipmapEXT;
+extern PFNGLGENERATEMIPMAPPROC glGenerateMipmap;
 extern PFNGLGETATTRIBLOCATIONARBPROC glGetAttribLocationARB;
 extern PFNGLVERTEXATTRIB1FARBPROC glVertexAttrib1fARB;
+extern PFNGLPOINTPARAMETERFVPROC glPointParameterfv;
 
 
 #define VOGL_ATLEAST_V20			0x00000001

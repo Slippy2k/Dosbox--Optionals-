@@ -90,7 +90,7 @@ void CPU_Core_Dynrec_Cache_Close(void);
  * In non-debug mode dosbox doesn't do detection (and hence doesn't crash at
  * that point). (game might crash later due to the unhandled exception) */
 
-#if C_DEBUG
+#if defined(C_DEBUG)
 // #define CPU_CHECK_EXCEPT 1
 // #define CPU_CHECK_IGNORE 1
  /* Use CHECK_EXCEPT when something doesn't work to see if a exception is 
@@ -550,10 +550,10 @@ Bit8u lastint;
 void CPU_Interrupt(Bitu num,Bitu type,Bitu oldeip) {
 	lastint=num;
 	FillFlags();
-#if C_DEBUG
+#if defined(C_DEBUG)
 	switch (num) {
 	case 0xcd:
-#if C_HEAVY_DEBUG
+#if defined(C_HEAVY_DEBUG)
  		LOG(LOG_CPU,LOG_ERROR)("Call to interrupt 0xCD this is BAD");
 //		DEBUG_HeavyWriteLogInstruction();
 //		E_Exit("Call to interrupt 0xCD this is BAD");
@@ -1353,7 +1353,12 @@ void CPU_RET(bool use32,Bitu bytes,Bitu oldeip) {
 					EXCEPTION_GP,selector & 0xfffc)
 				break;
 			default:
-				E_Exit("RET from illegal descriptor type %X",desc.Type());
+				LOG_MSG("CPU : cpu.cpp (RET From Illegal Descriptor Type %X)",desc.Type());
+				/* E_Exit Disabled				
+				   Microsoft DirectX Diagnosting Tool, On Close it brings a Type 0 Descriptor
+				   Seen only on this. No Idea but the System Works.                     				   
+				   E_Exit("RET from illegal descriptor type %X",desc.Type());*/
+				break;
 			}
 RET_same_level:
 			if (!desc.saved.seg.p) {
@@ -2120,7 +2125,7 @@ static void CPU_CycleIncrease(bool pressed) {
 		CPU_CycleLeft=0;CPU_Cycles=0;
 		if (CPU_CycleMax==old_cycles) CPU_CycleMax++;
 		if(CPU_CycleMax > 15000 ) 
-			LOG_MSG("CPU speed: fixed %d cycles. If you need more than 20000, try core=dynamic in DOSBox's options.",CPU_CycleMax);
+			LOG_MSG("CPU speed: fixed %d cycles.\nIf you need more than 20000, try core=dynamic in DOSBox's options.\n",CPU_CycleMax);
 		else
 			LOG_MSG("CPU speed: fixed %d cycles.",CPU_CycleMax);
 		GFX_SetTitle(CPU_CycleMax,-1,false);
@@ -2133,7 +2138,7 @@ static void CPU_CycleDecrease(bool pressed) {
 		CPU_CyclePercUsed-=5;
 		if (CPU_CyclePercUsed<=0) CPU_CyclePercUsed=1;
 		if(CPU_CyclePercUsed <=70)
-			LOG_MSG("CPU speed: max %d percent. If the game runs too fast, try a fixed cycles amount in DOSBox's options.",CPU_CyclePercUsed);
+			LOG_MSG("CPU speed: max %d percent.\nIf the game runs too fast, try a fixed cycles amount in DOSBox's options.\n",CPU_CyclePercUsed);
 		else
 			LOG_MSG("CPU speed: max %d percent.",CPU_CyclePercUsed);
 		GFX_SetTitle(CPU_CyclePercUsed,-1,false);
@@ -2173,7 +2178,7 @@ void CPU_Reset_AutoAdjust(void) {
 	ticksScheduled = 0;
 }
 
-class CPU: public Module_base {
+class CPU : public Module_base {
 private:
 	static bool inited;
 public:
@@ -2249,7 +2254,7 @@ public:
 		std::string str ;
 		CommandLine cmd(0,p->GetSection()->Get_string("parameters"));
 		
-		LOG_MSG("Cycle Type = %s",(const char*)p->GetSection()->Get_string("type"));
+		LOG_MSG("CPU : Current Cycle Type = %s\n",(const char*)p->GetSection()->Get_string("type"));
 		
 		if (type=="max") {
 			CPU_CycleMax=0;
@@ -2505,4 +2510,4 @@ void CPU_Init(Section* sec) {
 	sec->AddDestroyFunction(&CPU_ShutDown,true);
 }
 //initialize static members
-bool CPU::inited=false;
+bool CPU ::inited=false;

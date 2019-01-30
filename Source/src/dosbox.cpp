@@ -58,7 +58,10 @@ void PROGRAMS_Init(Section*);
 //void CREDITS_Init(Section*);
 void RENDER_Init(Section*);
 void VGA_Init(Section*);
-
+/* Custom S3 VGA /////////////////////////////////////////////////////////////////////////////////////////////*/
+void vesa_refresh_Init(Section*);
+void vesa_Patches_Init(Section*);
+/* Custom S3 VGA /////////////////////////////////////////////////////////////////////////////////////////////*/
 void DOS_Init(Section*);
 
 
@@ -151,7 +154,7 @@ static Bitu Normal_Loop(void) {
 				Bitu blah = (*CallBack_Handlers[ret])();
 				if (GCC_UNLIKELY(blah)) return blah;
 			}
-#if C_DEBUG
+#if defined(C_DEBUG)
 			if (DEBUG_ExitLoop()) return 0;
 #endif
 		} else {
@@ -388,6 +391,9 @@ static void DOSBOX_RealInit(Section * sec) {
 	machine = MCH_VGA;
 	int10.vesa_nolfb = false;
 	int10.vesa_oldvbe = false;
+	/* Custom S3 VGA /////////////////////////////////////////////////////////////////////////////////////////////*/
+	int10.vesa_no24bpp = false;
+	/* Custom S3 VGA /////////////////////////////////////////////////////////////////////////////////////////////*/
 	if      (mtype == "cga")      { machine = MCH_CGA; mono_cga = false; }
 	else if (mtype == "cga_mono") { machine = MCH_CGA; mono_cga = true; }
 	else if (mtype == "tandy")    { machine = MCH_TANDY; }
@@ -403,6 +409,9 @@ static void DOSBOX_RealInit(Section * sec) {
 //	else if (mtype == "vga_pvga1a")   { svgaCard = SVGA_ParadisePVGA1A; }
 	else if (mtype == "svga_paradise") { svgaCard = SVGA_ParadisePVGA1A; }
 	else if (mtype == "vgaonly")      { svgaCard = SVGA_None; }
+	/* Custom S3 VGA /////////////////////////////////////////////////////////////////////////////////////////////*/
+	else if (mtype == "vesa_no24bpp") { svgaCard = SVGA_S3Trio; int10.vesa_no24bpp = true;}
+	else if (mtype == "vesa_nolfb_no24bpp") { svgaCard = SVGA_S3Trio; int10.vesa_nolfb = true; int10.vesa_no24bpp = true;}
 	else E_Exit("DOSBOX:Unknown machine type %s",mtype.c_str());
 	
 		static char name[14];	
@@ -423,6 +432,8 @@ void DOSBOX_Init(void) {
 	Prop_int* Pint;
 	Prop_hex* Phex;
 	Prop_string* Pstring;
+	Prop_float* Pfloat;
+	Prop_double* Pdouble;	
 	Prop_bool* Pbool;
 	Prop_multival* Pmulti;
 	Prop_multival_remain* Pmulti_remain;
@@ -450,7 +461,7 @@ void DOSBOX_Init(void) {
 	const char* machines[] = {
 		"hercules", "cga", "cga_mono", "tandy", "pcjr", "ega",
 		"vgaonly", "svga_s3", "svga_et3000", "svga_et4000",
-		"svga_paradise", "vesa_nolfb", "vesa_oldvbe", 0 };
+		"svga_paradise", "vesa_nolfb", "vesa_oldvbe", "vesa_no24bpp","vesa_nolfb_no24bpp",0 };
 	secprop=control->AddSection_prop("dosbox",&DOSBOX_RealInit);
 	Pstring = secprop->Add_path("language",Property::Changeable::Always,"");
 	Pstring->Set_help(	"================================================================================================\n"
@@ -461,11 +472,11 @@ void DOSBOX_Init(void) {
 	Pstring->Set_help(  "================================================================================================\n"
 	                    "The type of machine DOSBox tries to emulate.");				
 
-	Pstring = secprop->Add_path("captures",Property::Changeable::Always,".\\CAPTURE");
+	Pstring = secprop->Add_path("captures",Property::Changeable::Always,"\\CAPTURE");
 	Pstring->Set_help(  "================================================================================================\n"
 	                    "Directory where things like wave, midi, screenshot get captured.");
 
-#if C_DEBUG
+#if defined(C_DEBUG)
 	LOG_StartUp();
 #endif
 
@@ -474,11 +485,17 @@ void DOSBOX_Init(void) {
 	secprop->AddInitFunction(&MEM_Init);//done
 	secprop->AddInitFunction(&HARDWARE_Init);//done
 	Pint = secprop->Add_int("memsize", Property::Changeable::WhenIdle,16);
-	Pint->SetMinMax(1,1024);
+	Pint->SetMinMax(1,3072);
 	Pint->Set_help(     "================================================================================================\n"
 		                "Amount of memory DOSBox has in megabytes.\n"
 		                "This value is best left at its default to avoid problems with some games, though few games\n"
-		                "might require a higher value. There is generally no speed advantage when raising this value.");
+		                "might require a higher value. There is generally no speed advantage when raising this value.\n"
+						"DOSBox Current Support Max Memory MS-DOS    : 256MB\n"
+						"DOSBox Current Support Max Memory Windows 95: 512MB\n"
+						"DOSBox Current Support Max Memory Windows 98: 1GB (1024MB)\n"
+						"Max Memory for DOS Games (The don't like more):\n"
+						"- Goblins 3             : ~32MB\n"
+						"- Sleepwalker           : ~ 4MB");
 		
 
 	Pint = secprop->Add_int("memsvga3", Property::Changeable::WhenIdle,0);	
@@ -509,7 +526,7 @@ void DOSBOX_Init(void) {
 	Pint = secprop->Add_int("CutVesaResolutionIndex",Property::Changeable::Always,0);
 	Pint->SetMinMax(0,32);	
 	Pint->Set_help(		  "================================================================================================\n"
-						  "IF nonzero, the VESA modelist is capped so that it contains no more than the specified number of\n"
+						  "If nonzero, the VESA modelist is capped so that it contains no more than the specified number of\n"
 						  "video modes did you set. Set this option to a value between 8 to 32 if the DOS application has\n"
 						  "problems with long modelists or a fixed buffer for querying modes. Such programs may crash if\n"
 						  "given the entire modelist supported by DOSBox.\n"
@@ -517,8 +534,32 @@ void DOSBOX_Init(void) {
 						  "                           reads the modelist into. DOSBox's normal modelist is too long and the\n"
 			              "                           game will overrun the buffer and crash without this setting.\n"
 						  "Pyl (Software Mode)      ..Set a Value between 24 and 34\n"
+						  "Quake 1.06 (DOS)         ..Set 150\n"
 						  "I'm Include a tool from VesaLib Archiv, CHKVESA.COM. You can list the Resolution with this tool");					  
 	
+	Pbool = secprop->Add_bool("LogVesaResolutionIndex",Property::Changeable::Always,false);	
+	Pbool->Set_help(		  "================================================================================================\n"
+						  "Log the VESA Video mode List to 'dosbox_log'.");
+						  				 
+	Pbool = secprop->Add_bool("S3Screen_Fix_320x240x8",Property::Changeable::Always,false);
+	Pbool->Set_help(     "================================================================================================\n"
+	                     "This Patch and Change the Resolution at index 0x153. From 320x240x4 bit to 320x200x8 Bit. Use\n"
+						 "this if your Game or Scene Demo Crashed with this Mode. Example? This fixed: (Default false)\n"
+						 "- Scene Demo: RealTech 'Countdown'");	
+						 
+	Pbool = secprop->Add_bool("S3Screen_Fix_400x300x8",Property::Changeable::Always,false);
+	Pbool->Set_help(     "================================================================================================\n"
+	                     "This Patch and Change the Resolution at index 0x166. From 400x300x8 bit to 320x480x8 Bit. Use\n"
+						 "this if your Game or Scene Demo Crashed with this Mode. Example? This fixed: (Default false)\n"
+						 "- Scene Demo: Habitual Demo");		
+
+	Pbool = secprop->Add_bool("VesaVbe1.2_32Bit_Modes",Property::Changeable::Always,true);
+	Pbool->Set_help(     "================================================================================================\n"
+	                     "This Change the Vesa 1.2 High Color Modes to 8:8:8 (24-bit) (0x10F, 0x112, 0x115, 0x118).\n"
+						 "Note: Version 1.2 of the VESA BIOS Extensions explicitly states 24Bit Color Modes not 32Bit. Set\n"
+						 "this to false use 24Bit Modes. Default is True, DOSBox Original Settings. Example? This fixed:\n"
+						 "- Scene Demo: COMA 'Parhaat' 1997 demo");						 
+		
 		
 	secprop->AddInitFunction(&CALLBACK_Init);
 	secprop->AddInitFunction(&PIC_Init);//done
@@ -550,7 +591,42 @@ void DOSBOX_Init(void) {
 	Pbool->Set_help(    "================================================================================================\n"
 	                    "Debug Output for Modes, Aspect Ratios und Resoultion Handle. For the Developer");	
 						
+	/* Custom S3 VGA /////////////////////////////////////////////////////////////////////////////////////////////*/	
+	secprop=control->AddSection_prop("vesa_refresh",&vesa_refresh_Init,true);
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_512x384",Property::Changeable::Always,70);
+	Pint->Set_help(     "================================================================================================\n"
+	                    "Set the Refresh rates for VESA graphics modes (Default Refresh Rate: 70)");
+	
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_640x350",Property::Changeable::Always,70);
+	Pint->Set_help(    "Default Refresh Rate: 70");
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_640x400",Property::Changeable::Always,70);
+	Pint->Set_help(    "Default Refresh Rate: 70");	
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_640x480",Property::Changeable::Always,60);
+	Pint->Set_help(    "Default Refresh Rate: 60");
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_720x480",Property::Changeable::Always,60);
+	Pint->Set_help(    "Default Refresh Rate: 60");	
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_800x600",Property::Changeable::Always,60);
+	Pint->Set_help(    "Default Refresh Rate: 60");
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_1024x768",Property::Changeable::Always,60);	
+	Pint->Set_help(    "Default Refresh Rate: 50");
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_1188x344",Property::Changeable::Always,70);
+	Pint->Set_help(    "Default Refresh Rate: 70 --> Note: VESA text mode  132x43 (9x8 character cell)");
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_1188x400",Property::Changeable::Always,70);
+	Pint->Set_help(    "Default Refresh Rate: 70 --> Note: VESA text modes 132x25 & 132x50 (9x16 & 9x8 character cells).");
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_1188x480",Property::Changeable::Always,60);
+	Pint->Set_help(    "Default Refresh Rate: 60 --> Note: VESA text mode 132x60 (9x8 character cell).");
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_1152x864",Property::Changeable::Always,60);
+	Pint->Set_help(    "Default Refresh Rate: 60");
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_1280x960",Property::Changeable::Always,60);
+	Pint->Set_help(    "Default Refresh Rate: 60");	
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_1280x1024",Property::Changeable::Always,60);	
+	Pint->Set_help(    "Default Refresh Rate: 60");	
+	Pint = secprop->Add_int("Vesa_Graphic_Mode_1600x1200",Property::Changeable::Always,60);
+	Pint->Set_help(    "Default Refresh Rate: 60\n"
+	                   "================================================================================================");
 
+
+	/* Custom S3 VGA /////////////////////////////////////////////////////////////////////////////////////////////*/			
 	const char *scalers[] = {
 		"none", "normal2x", "normal3x",
 #if RENDER_USE_ADVANCED_SCALERS>2
@@ -669,10 +745,10 @@ void DOSBOX_Init(void) {
 	Pstring = secprop->Add_string("voodoo",Property::Changeable::WhenIdle,"software");
 	Pstring->Set_values(voodoo_settings);
 	Pstring->Set_help(      "================================================================================================\n"
-	                        "Enable VOODOO support. Use the Voodoo Emulation with the Output method (Cat: sdl) Surface\n"	
-     				        "Texture or TextureNB, OpenGL/OpenGLNB. Recommend: Texture/Texturenb. Performance Setting: Set the\n"
-					        "Texture Renderer to OpenGL. Acceleration will be disabled on auto, direct3d or Software\n"
-							"NOTE: If you use SOFTWARE Mode. Aspect Ratio must set to FALSE or you become gfx glitches");
+	                        "Enable VOODOO support. Use the Voodoo Emulation with the Output method (Cat: sdl) Recommend:\n"
+							"Texture(nb)/OpengGL(nb). Performance Setting: Set the exture Renderer to OpenGL. Acceleration\n"
+					        "is disabled on auto, direct3d or Software NOTE: If you use SOFTWARE Mode. Aspect Ratio must set\n"
+							"to FALSE or you become gfx glitches. ( Default: opengl");
 	
 	const char* voodoo_memory[] = {"standard","max",0};
 	Pstring = secprop->Add_string("Voodoo_Memory",Property::Changeable::OnlyAtStart,"standard");
@@ -682,48 +758,173 @@ void DOSBOX_Init(void) {
 		                     "   standard  : 4MB  card (2MB front buffer + 1x2MB texture unit)\n"
 					         "   max       : 12MB card (4MB front buffer + 2x4MB texture units)");
 					  
-	const char* voodoo_filter[] = {"default","gl_nearest","gl_linear_1","gl_linear_2",0};		
-	Pstring = secprop->Add_string("Voodoo_Filter",Property::Changeable::WhenIdle,"default");
+	Pint = secprop->Add_int("Voodoo_MemXtra",Property::Changeable::OnlyAtStart,0);
+	Pint->SetMinMax(0,512);
+	Pint->Set_help(         "================================================================================================\n"
+	                        "Amount Of Voodoo Videomemory. Set this greater as 0 will be Disable the Option above. (Default: 0)\n");					  
+							
+	const char* voodoo_filter[] = {"none","point","bilinear","trilinear","anisotropic","testmode",0};		
+	Pstring = secprop->Add_string("Voodoo_Filter",Property::Changeable::WhenIdle,"trilinear");
 	Pstring->Set_values(voodoo_filter);	
 	Pstring->Set_help(      "================================================================================================\n"
-	                        "Filtering in OpenGL Mode\n"
-	                        "   default     : GL_Nearest & Trilinear Filter\n"
-					        "   gl_nearest  : Screen will not Filtering\n"
-					        "   gl_linear_1 : Screen will be Full Filtering"
-							"   gl_linear_2 : GL_Linear &  & Trilinear Filter");	
+	                        "Filtering in OpenGL Mode                                                   (Default: anisotropic)\n"
+	                        "   none           : Using System Default Settings\n"
+					        "   point          : No Filtering. \n"
+					        "   bilinear       : Full Filtering (cheapest)\n"
+							"   trilinear      : Good Filtering Mode\n"
+							"   anisotropic    : Best Filter Mode\n"
+							"   testmode	   : Testing Only");	
 										
 	const char* voodoo_glshade[] = {"none", "flat", "smooth",0};						  
 	Pstring = secprop->Add_string("Voodoo_GLShade",Property::Changeable::WhenIdle,"none");
 	Pstring->Set_values(voodoo_glshade);	
 	Pstring->Set_help(      "================================================================================================\n"
-	                        "Filtering in OpenGL Mode\n"
+	                        "Filtering in OpenGL Mode                                                       (Default: smooth)\n"
 	                        "   none       : Default Value \n"
 					        "   flat       : GL_ShadeModel using flat\n"
 					        "   smooth     : GL_ShadeModel using smooth");
 							
-	Pstring = secprop->Add_string("voodoo_Window",Property::Changeable::OnlyAtStart,"640x480");
+	const char* voodoo_glwraps[] = {"gl_repeat", "gl_mirrored_repeat", "gl_clamp_to_edge","gl_clamp_to_border",0};						  
+	Pstring = secprop->Add_string("Texture_Wrap_S",Property::Changeable::WhenIdle,"gl_repeat");
+	Pstring->Set_values(voodoo_glwraps);	
 	Pstring->Set_help(      "================================================================================================\n"
-	                        "Change Voodoo/3DFX Glide Resolution in Window Mode. Possible values are 640x480,800x600,1024x768\n"
-					        "or 1280x720 etc. ATTENTION: 3DFX Games use 640x480 as Default Resolution.If you set a higher\n"
-					        "resolution it may be that there are graphics errors.");
+	                        "Change this ONLY if you Problems with textures. Sets the wrap parameter for texture coordinate\n"
+	                        "   gl_repeat         : Default Value \n"
+					        "   gl_mirrored_repeat:\n"
+					        "   gl_clamp_to_edge  :\n"
+							"   gl_clamp_to_border:\n"
+							"Settings gl_clamp_to_edge will Fix F1'97 Texture Screen Beginners level");			
+
+	const char* voodoo_glwrapt[] = {"gl_repeat", "gl_mirrored_repeat", "gl_clamp_to_edge","gl_clamp_to_border",0};						  
+	Pstring = secprop->Add_string("Texture_Wrap_R",Property::Changeable::WhenIdle,"gl_repeat");
+	Pstring->Set_values(voodoo_glwrapt);	
+	Pstring->Set_help(      "================================================================================================\n"
+	                        "Change this ONLY if you Problems with textures. Sets the wrap parameter for texture coordinate\n"
+	                        "   gl_repeat         : Default Value \n"
+					        "   gl_mirrored_repeat: \n"
+					        "   gl_clamp_to_edge  : \n"
+							"   gl_clamp_to_border:");								
+							
+	Pstring = secprop->Add_string("voodoo_Window",Property::Changeable::OnlyAtStart,"512x384");
+	Pstring->Set_help(      "================================================================================================\n"
+	                        "Change Voodoo 3DFX Resolution in Window Mode. NOTE: 3DFX Games under DOS use 512x384/640x480\n"
+							"Windows 9x Games begins at 512x384 or 640x480. Blood 1 3DFX must be set equal to the Screen\n"
+							"Config how in the Blood,cfg. This option works only if [sdl] --> VoodooUseOwnWindowRes = true");
 					  
-	Pstring = secprop->Add_string("voodoo_Fullscreen",Property::Changeable::OnlyAtStart,"640x480");	
+	Pstring = secprop->Add_string("voodoo_Fullscreen",Property::Changeable::OnlyAtStart,"512x384");	
 	Pstring->Set_help(      "================================================================================================\n"
-	                        "Change Voodoo/3DFX Glide Resolution in FullScreen. Possible values are 640x480,800x600,1024x768\n"
-					        "or 1280x720 etc. ATTENTION: 3DFX Games use 640x480 as Default Resolution. If you set a higher\n"
-					        "resolution it may be that there are graphics errors.\n"
-					        "Success in Window/Fullscreen Mdoe: Tomb Raider, Good: Fatal Racing, Bad: Blood 3DFX or PYL");
+	                        "Change Voodoo 3DFX Resolution in Fullscreen Mode. NOTE: 3DFX Games under DOS use 512x384/640x480\n"
+							"Windows 9x Games begins at 512x384 or 640x480. Blood 1 3DFX must be set equal to the Screen\n"
+							"Config how in the Blood,cfg. This option works only if [sdl] --> VoodooUseOwnFullScRes = true");
 	
-	Pint = secprop->Add_int("TrilinearAmount",Property::Changeable::OnlyAtStart,2);
-	Pint->SetMinMax(2,64);
+	Pbool = secprop->Add_bool("voodoo_Aspect",Property::Changeable::Always,true);		
+	Pbool->Set_help(        "================================================================================================\n"
+	                        "Dont Stretch the Mode on Widescreen Resolutions. (Default: true)" );
+							
+	Pint = secprop->Add_int("ZoomScreen_Width",Property::Changeable::OnlyAtStart,0);
+	Pint->SetMinMax(-4096,4096);
 	Pint->Set_help(         "================================================================================================\n"
-	                        "Trilinear Filtering Amount. Only for default & gl_linear_2 (Default is Value 2)");
+	                        "Zoom Voodoo Game Screen (Width Aspect) (Default: 0) (Can used in combination with voodoo_Aspect)");
+
+	Pint = secprop->Add_int("ZoomScreen_Height",Property::Changeable::OnlyAtStart,0);
+	Pint->SetMinMax(-4096,4096);
+	Pint->Set_help(         "================================================================================================\n"
+	                        "Zoom Voodoo Game Screen (Height Aspect) (Default: 0)");							
+	
+	Pfloat = secprop->Add_float("Anisotropic_Level",Property::Changeable::OnlyAtStart,16.0);
+	Pfloat->SetMinMax(2.0,16.0);
+	Pfloat->Set_help(         "================================================================================================\n"
+	                        "Anisotropic Filtering Levels. Only for Anisotropic Filter Mode (Default is Value 16)");
+														
+	Pbool = secprop->Add_bool("a_ClipLowYHigh",Property::Changeable::Always,false);		
+	Pbool->Set_help(        "================================================================================================\n"
+							"OpenGL Only, Alternate Height Patch for VooDoo's ClipLow Y High.\n"
+							"On some game the Height is on Higher Resolutions not normal. (Default false)"                );
+
+	Pint = secprop->Add_int("n_ClipLowYHigh",Property::Changeable::OnlyAtStart,0);
+	Pint->SetMinMax(0,100);
+	Pint->Set_help(         "================================================================================================\n"
+	                        "OpenGL Only. Pitch VooDoo's ClipLow Y High (Default: 0)");
+							
 							
 	Pbool = secprop->Add_bool("compatible_flag",Property::Changeable::Always,false);		
 	Pbool->Set_help(        "================================================================================================\n"
-	                        "This flag is intended to put the GL into a \"forward compatible\" mode, which means that no\n"
-	                        "deprecated functionality will be supported, possibly at a gain in performance, and only applies\n"
-					        "to GL 3.0 and later contexts. Note: On true, resolution will bypass");	
+	                        "This flag is intended to put the GL Into a Software (Default False)");	
+							
+							
+	Pbool = secprop->Add_bool("gl_PointSize_use",Property::Changeable::Always,false);		
+	Pbool->Set_help(         "================================================================================================\n"
+	                        "OpenGL Only. Modify the 2D Texture on Higher Resolution. (Default False)");
+							
+	Pfloat = secprop->Add_float("gl_PointSize_num",Property::Changeable::OnlyAtStart,0.0);
+	Pfloat->SetMinMax(0.0,1000.0);
+	Pfloat->Set_help(         "================================================================================================\n"
+	                        "OpenGL Only. Modify Amount the Pointsize the 2D Texture on Higher Resolution. (Default is Value 0)");
+							
+							
+	Pbool = secprop->Add_bool("glScissor_flag",Property::Changeable::Always,true);		
+	Pbool->Set_help(        "================================================================================================\n"
+	                        "If you have on High Resolution a problem with the Viewport and this is Cutted to Left/Bottom or.\n"
+							"the Screen looks ugly the rest from the Screen is Blank or Parts is Flickering/Tearing.\n"
+							"Set this to False forces to not use the glScissor calculation and free the fixed the Resolution:\n"
+							"- Argosy 2325\n"
+							"- Pyl\n"
+							"- Warhammer: Dark Omen (Fixed Cutscenes) and i think on other 3DFX Games. (Default true)");
+							
+	Pbool = secprop->Add_bool("glP_Smoth_flag",Property::Changeable::Always,false);		
+	Pbool->Set_help(        "================================================================================================\n"
+	                        "OpenGL Only, Enable Antialiasing for points (Default false) (Just For Testing)" );
+							
+	Pbool = secprop->Add_bool("glL_Smoth_flag",Property::Changeable::Always,false);		
+	Pbool->Set_help(        "================================================================================================\n"
+	                        "OpenGL Only, Enable Antialiasing for lines (Default false) (Just For Testing)"  );
+
+	Pbool = secprop->Add_bool("glG_Smoth_flag",Property::Changeable::Always,false);		
+	Pbool->Set_help(        "================================================================================================\n"
+							"OpenGL Only, Enable Antialiasing for Polygons (Default false) (Just For Testing)" );
+							
+	Pbool = secprop->Add_bool("glBlendFc_flag",Property::Changeable::Always,false);		
+	Pbool->Set_help(        "================================================================================================\n"
+							"OpenGL Only, Enable blending (Default false) (Just For Testing)");
+
+	Pbool = secprop->Add_bool("glPersCor_flag",Property::Changeable::Always,false);		
+	Pbool->Set_help(        "================================================================================================\n"
+							"OpenGL Only, Enable GL_PERSPECTIVE_CORRECTION_HINT (Default false)" );
+							
+	Pbool = secprop->Add_bool("glGMipMap_flag",Property::Changeable::Always,false);		
+	Pbool->Set_help(        "================================================================================================\n"
+							"OpenGL Only, Enable GL_GENERATE_MIPMAP_HINT (Default false) (Just For Testing)" );
+
+	Pbool = secprop->Add_bool("gl_GLFog__flag",Property::Changeable::Always,false);		
+	Pbool->Set_help(        "================================================================================================\n"
+							"OpenGL Only, Enable GL_FOG_HINT (Default false)  (Just For Testing)" );							
+
+	Pfloat = secprop->Add_float("gl_ortho_zNear",Property::Changeable::OnlyAtStart,0.0);
+	Pfloat->SetMinMax(-200.0,200.0);
+	Pfloat->Set_help(         "================================================================================================\n"
+	                        "Modify the zNear Value (Default 0.0). Specify the distances to the nearer clipping planes");	
+
+	Pfloat = secprop->Add_float("gl_ortho_zFar",Property::Changeable::OnlyAtStart,-1.0);
+	Pfloat->SetMinMax(-200.0,200.0);
+	Pfloat->Set_help(         "================================================================================================\n"
+	                        "OpenGL Only. Modify the zFar Value (Default -1.0) Specify the dists to the farther depth\n"
+							"clipping planes Change this to negative ~9.0 will fix the Far Objects in Pyl on High Resolution");	
+	
+	Pint = secprop->Add_int("gl_Major_Version",Property::Changeable::OnlyAtStart,2);
+	Pint->SetMinMax(0,100);
+	Pint->Set_help(         "================================================================================================\n"
+	                        "Change the OpengGL Context Major Version. Do not set too high otherwise Opengl crashes. (default 2)");
+
+	Pint = secprop->Add_int("gl_Minor_Version",Property::Changeable::OnlyAtStart,1);
+	Pint->SetMinMax(0,100);
+	Pint->Set_help(         "================================================================================================\n"
+	                        "Change the OpengGL Context Minor Version.Do not set too high otherwise Opengl crashes. (default 1)");	
+
+	Pbool = secprop->Add_bool("sh_FbzcpCca_Sw2",Property::Changeable::Always,true);		
+	Pbool->Set_help(        "================================================================================================\n"
+							"Set this to False Fix F1'97 Massive Grafic Glitch\n"
+							"Shader: The FBZCOLORPATH in the switch FBZCP_CC_ASELECT will be not used (default true)");												
+
 #endif
 
 
@@ -749,6 +950,12 @@ void DOSBOX_Init(void) {
 	Pint->Set_help(         "================================================================================================\n"
 	                        "How many milliseconds of data to keep on top of the blocksize.");
 
+	
+	Pbool = secprop->Add_bool("UseMediaKeys",Property::Changeable::WhenIdle,false);
+	Pbool->Set_help(        "================================================================================================\n"
+	                        "Allow and set Default to use the media hotkeys instead of keys for use tzte Mixer Volume + and -.\n"
+							"The Media Keys is System Wide. If you change the Volume this will change the Volume System Wide");
+							
 	secprop=control->AddSection_prop("midi",&MIDI_Init,true);//done
 	secprop->AddInitFunction(&MPU401_Init,true);//done
 
@@ -779,7 +986,7 @@ void DOSBOX_Init(void) {
 	                         "in the case of coreaudio, you can specify a soundfont here. When using a Roland MT-32 rev. 0 as\n"
 	                         "midi output device, some games may require a delay in order to prevent 'buffer overflow' issues.\n"
 	                         "In that case, add 'delaysysex', for example: 'midiconfig=2 delaysysex' See the README/Manual for\n"
-	                         "more details.");
+	                         "more details.");						 
 
 #ifdef C_FLUIDSYNTH
 	const char *fluiddrivers[] = {"pulseaudio", "alsa", "oss", "coreaudio", "dsound", "portaudio", "sndman", "jack", "file", "default",0};
@@ -900,7 +1107,7 @@ void DOSBOX_Init(void) {
 
 #include "mt32options.h"
 
-#if C_DEBUG
+#if defined(C_DEBUG)
 	secprop=control->AddSection_prop("debug",&DEBUG_Init);
 #endif
 
@@ -1164,11 +1371,34 @@ void DOSBOX_Init(void) {
 	Pbool->Set_help(        "================================================================================================\n"
 	                        "Enable UMB support.");
 
+	Pint = secprop->Add_int("files",Property::Changeable::OnlyAtStart,127);
+	Pint->Set_help(         "================================================================================================\n"
+	                         "Number Of File Handles For DOS programs. (equivalent to \"files=\" in config.sys) (Default: 127)");
+	
 	secprop->AddInitFunction(&DOS_KeyboardLayout_Init,true);
 	Pstring = secprop->Add_string("keyboardlayout",Property::Changeable::WhenIdle, "auto");
 	Pstring->Set_help(      "================================================================================================\n"
 	                        "Language code of the keyboard layout (or none).");
+							
+	Pbool = secprop->Add_bool("Disable_DOS4GW",Property::Changeable::WhenIdle,false);
+	Pbool->Set_help(        "================================================================================================\n"
+	                        "Disable DOS/4GW Version 2.01a on Drive Z:\n"
+							"You can Unbind an old DOS/4GW e.q 1.97 from the Executbale by usinf the command DOS4GU.exe. Yes,\n"
+							"I have this renamed. Use a newer DOS/4GW speed up your Games. Example? Terminator: FS Skynet");
 
+	Pbool = secprop->Add_bool("Disable_DOS32A",Property::Changeable::WhenIdle,false);
+	Pbool->Set_help(        "================================================================================================\n"
+	                        "Disable the DOS32A Extender Version 9.1.2 on Drive Z:");	
+
+	Pbool = secprop->Add_bool("Disable_CWSDPMI",Property::Changeable::WhenIdle,false);
+	Pbool->Set_help(        "================================================================================================\n"
+	                        "Disable the CWSDPMI on Drive Z: (For compatibility)");	
+
+	Pbool = secprop->Add_bool("DOS4GW_As_DOS32",Property::Changeable::WhenIdle,false);
+	Pbool->Set_help(        "================================================================================================\n"
+	                        "Use DOS32A Extender 9.12 instead of DOS4GW 2.01 (e.q. as Benchmark and Compare)");							
+							
+							
 	// Mscdex
 	secprop->AddInitFunction(&MSCDEX_Init);
 	secprop->AddInitFunction(&DRIVES_Init);
@@ -1188,24 +1418,25 @@ void DOSBOX_Init(void) {
 		"Lines in this section will be run at startup. You can put your MOUNT lines here.\n"
 		"================================================================================================\n"
 		"ECHO OFF\n"
-		"======================================================================\n"
+		"MOUSECAP\n"
+		"================================================================================================\n"
         "-- Example: Image Mount Options HD (The Simplest Way)\n"
 		"MOUNT    C \".\\HDD-C\" freesize 250\n"
-		"MOUNT    D \".\\HDD-D\" freesize 250\n\n"
+		"MOUNT    D \".\\HDD-D\" freesize 250\n\n\n"
         "-- Example: Image Mount Options HD (As Image variant): (Using 250MB Harddrive)\n"
 		"SET HD_DIR=.\\HDD_IMAGE\n"
 		"SET HDIMG1=MS-DOS 5.00.img\n"
 		"SET HDIMG2=MS-DOS 6.22.img\n"
-		"IMGMOUNT 2 \"%HD_DIR%\\%HDIMG1%\" -size 512,63,16,507 -fs none\n\n"
-		"======================================================================\n"
+		"IMGMOUNT 2 \"%HD_DIR%\\%HDIMG1%\" -size 512,63,16,507 -fs none\n\n\n"
+		"================================================================================================\n"
         "-- Example: Image Mount Options CD:\n"
         "SET CD_DIR=.\\HDD_CDROM\n"
 		"SET CDROM1=GAME1.CUE\n"
 		"SET CDROM2=GAME2.CUE\n\n"
         "-- Example: As Directory or Image (Iso, Bin, Cue)\n"
 		"MOUNT    E \"%CD_DIR%\" -t cdrom\n"
-		"IMGMOUNT E \"%CD_DIR%\\%CDROM1%\" -t cdrom\n\n"
-		"======================================================================\n"
+		"IMGMOUNT E \"%CD_DIR%\\%CDROM1%\"  \"%CD_DIR%\\%CDROM2%\" -t cdrom\n\n"
+		"================================================================================================\n"
         "-- Example: Image Mount Options Floppy:\n"
         "SET DSKDIR=.\\HDD_FLOPPYS\n"
 		"SET DISK01=%DSKDIR%\\DISK1.IMA\n"
@@ -1217,14 +1448,23 @@ void DOSBOX_Init(void) {
         "-- Example: Image, Boot, Multi (Multiples Floppy in One Drive) (img, ima)\n"
 		"IMGMOUNT A \"%DISK01%\" \"%DISK02%\" \"%DISK03%\" \"%DISK04%\" \"%DISK05%\" \"%DISK06%\" -t floppy\n"
 		"BOOT       \"%DISK01%\" \"%DISK02%\" \"%DISK03%\" \"%DISK04%\" \"%DISK05%\" \"%DISK06%\" -l A\n\n"
-		"REM More Mount Examples: http:////www.dosbox.com//wiki//IMGMOUNT\n\n"
-		"======================================================================\n"
+		"REM More Mount Examples: http:////www.dosbox.com//wiki//IMGMOUNT\n\n\n"
+		"================================================================================================\n"
         "-- Default Autoexec Bat:\n"
-		"SET PATH=Z:\\;C:\\;C:\\DOS;C:\\WINDOWS\n"
-		"SET BLASTER=A220 I7 D1 H5 P330 T6\n"
+		"SET PATH=Z:\\;C:\\;C:\\DOS;C:\\WINDOWS\n\n"
+		"SET BLASTER=A220 I5 D1 T3 P330 H6 E620\n"
+		" |    |     |    |  |  |  |    |  |\n"
+		" |    |     |    |  |  |  |    |  |_______ AWE 32 Only Parameter\n"
+		" |    |     |    |  |  |  |    |__________ \"High\" DMA Channel\n"
+		" |    |     |    |  |  |  |_______________ MIDI Port\n"
+		" |    |     |    |  |  |__________________ Type of Card\n"
+		" |    |     |    |  |_____________________ DMA Channel\n"
+		" |    |     |    |________________________ Interrupt\n"
+		" |    |     |_____________________________ Port Address\n"
+		" |    |___________________________________ Environment Variable\n"
+		" |________________________________________ DOS Command\n\n"
 		"SET MIDI=SYNTH:1 MAP:E\n\n"
-		"======================================================================\n"
-		"MOUSECAP\n"
+		"MIXER MASTER 35"
 		"================================================================================================\n"
 	);
 	MSG_Add("CONFIGFILE_INTRO",	

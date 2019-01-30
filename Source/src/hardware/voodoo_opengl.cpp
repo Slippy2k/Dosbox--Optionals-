@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <map>
+#include <vector>
 
 #include "dosbox.h"
 #include "video.h"
@@ -28,10 +29,10 @@
 #include "voodoo_emu.h"
 #include "voodoo_opengl.h"
 
-
 #if C_OPENGL
 
 #include "voodoo_def.h"
+
 
 INT32 cached_line_front_y=-1;
 INT32 cached_line_front_width = -1;
@@ -44,6 +45,29 @@ INT32 cached_line_back_width = -1;
 INT32 cached_line_back_length=-1;
 INT32 cached_line_back_pixels=-1;
 UINT32* cached_line_back_data=NULL;
+
+struct READ_BUFFER_BLOCK{
+	struct {
+		struct {
+			INT32   Y; 		// cached_line_front_y
+			INT32   W; 		// cached_line_front_width
+			INT32   L; 		// cached_line_front_length
+			INT32   P; 		// cached_line_front_pixels
+			UINT32* Buffer; // cached_line_front_data
+		}Frnt;
+		struct {
+			INT32   Y; 		// cached_line_back_y
+			INT32   W; 		// cached_line_back_width
+			INT32   L; 		// cached_line_back_length
+			INT32   P; 		// cached_line_back_pixels
+			UINT32* Buffer; // cached_line_back_data
+		}Back;			
+	}Line;
+};
+static READ_BUFFER_BLOCK Cache;
+
+GLfloat anisotropy;
+GLint minFilter;
 
 static INT32 adjust_x=0;
 static INT32 adjust_y=0;						
@@ -60,6 +84,13 @@ static UINT32 set_OpenGLFilter= 0;
 
 // Temporary
 bool has_alpha = false; bool has_stencil = false; bool full_sdl_restart = false;
+// Debug Info
+bool bUseShColPathInfo = false;
+
+bool nScreenSetup = false;
+extern void GFX_CaptureMouse(void);
+extern void GFX_CaptureMouse_Mousecap_on(void);
+extern bool mouselocked;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 struct SDL_Block {
@@ -74,13 +105,37 @@ struct SDL_Block {
 	struct {
 		SDL_GLContext GLContext;
 		int	GL_filtering;
-		int TrilinearAmount;
+		float Anisotropic_Level;
 		int	GL_ShadeModel;
 		const char*	sglshademdl;	
 		const char*	sfiltering;	
 		GLint minFilter;
-		bool compatibleFlag;
-		void * framebuf;
+		int   n_ClipLowYHigh;
+		int   glZoomFaktor_W;
+		int   glZoomFaktor_H;	
+		int   gl_Major_Version;
+		int   gl_Minor_Version;		
+		bool  compatibleFlag;
+		bool  glScissor_flag;
+		bool  glP_Smoth_flag;
+		bool  glL_Smoth_flag;
+		bool  glBlendFc_flag;
+		bool  gl_GLFog__flag;				
+		bool  glGMipMap_flag;
+		bool  glPersCor_flag;
+		bool  glG_Smoth_flag;	
+		bool  a_ClipLowYHigh;
+		bool  voodoo_aspect;
+		bool  gl_PointSize_use;
+		float gl_PointSize_num;		
+		float gl_ortho_zNear;
+		float gl_ortho_zFar;		
+		bool sh_FbzcpCca_Sw2;
+		int gl_wrap_s;
+		const char* sgl_wrap_s;
+		int gl_wrap_t;	
+		const char* sgl_wrap_t;	
+		void *framebuf;
 
 	}opengl;
 	Uint32 sdl_WindowFlags;
@@ -104,6 +159,7 @@ struct SDL_Block {
 	int posX_Old;
 	int posY_Old;	
 	int windowstaskbaradjust;
+	int displaynumber;
 	struct {
 		const char* output;
 		const char* texture;
@@ -120,7 +176,123 @@ UINT32 texrgb[256*256];
 /* texture address map */
 std::map <const UINT32, ogl_texmap> textures[2];
 
+/* ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+void glCheckError(const GLchar* file, GLuint line, const GLchar* expression)
+{
+	GLenum errorCode = glGetError();
 
+	if (errorCode == 0){
+		return;
+	}
+		
+	if (errorCode != GL_NO_ERROR)
+	{
+		std::string fileString = file;
+		std::string error = "Unknown error";
+		std::string description = "No description";
+		//std::string sFullDescription = "";
+		char sFullDescription[4096]={0};
+		int nResult;
+		nResult = errorCode;
+
+		switch (errorCode)
+		{
+			case GL_INVALID_ENUM:
+			{
+				error = "GL_INVALID_ENUM";
+				//description = "An unacceptable value has been specified for an enumerated argument.";
+				description = "Einem Aufzählungsargument wurde ein inakzeptabler Wert angegeben.";
+				break;
+			}
+
+			case GL_INVALID_VALUE:
+			{
+				error = "GL_INVALID_VALUE";
+				//description = "A numeric argument is out of range.";
+				description = "Ein numerisches Argument liegt außerhalb des gültigen Bereichs.";
+				break;
+			}
+
+			case GL_INVALID_OPERATION:
+			{
+				error = "GL_INVALID_OPERATION";
+				//description = "The specified operation is not allowed in the current state.";
+				description = "Die angegebene Operation ist im aktuellen Status nicht zulässig.";
+				break;
+			}
+
+			case GL_STACK_OVERFLOW:
+			{
+				error = "GL_STACK_OVERFLOW";
+				//description = "This command would cause a stack overflow.";
+				description = "Dieser Befehl würde ein Stapelüberlauf verursachen.";				
+				
+				break;
+			}
+
+			case GL_STACK_UNDERFLOW:
+			{
+				error = "GL_STACK_UNDERFLOW";
+				//description = "This command would cause a stack underflow.";
+				description = "Dieser Befehl würde ein Stapelunterlauf verursachen.";					
+				break;
+			}
+
+			case GL_OUT_OF_MEMORY:
+			{
+				error = "GL_OUT_OF_MEMORY";
+				//description = "There is not enough memory left to execute the command.";
+				description = "Es ist nicht genügend Speicherplatz vorhanden, um den Befehl auszuführen.";
+				break;
+			}
+
+			case GL_INVALID_FRAMEBUFFER_OPERATION:
+			{
+				error = "GL_INVALID_FRAMEBUFFER_OPERATION";
+				description = "The object bound to FRAMEBUFFER_BINDING is not \"framebuffer complete\".";		
+				break;
+			}
+		}		
+		
+		sprintf(sFullDescription,"\n############ GL ERROR ############\n"
+								  "Internal OpenGL call failed in %s\n"
+								  "Line: %d\n"
+								  "Expression Code:\n\n"
+								  "%s\n\n"
+								  "Error: %s  (%d)\n"			
+								  "%s\n"
+								  "###################################\n",
+								  file,line,expression,error.c_str(),nResult, description.c_str());
+								  
+		LOG_MSG(sFullDescription);
+		SDL_Delay(2000);
+		E_Exit(sFullDescription);
+	}
+}
+
+/* ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+void _check_gl_error(const char *file, int line) {
+        GLenum err (glGetError());
+ 
+        while(err!=GL_NO_ERROR) {
+                std::string error;
+				int nResult = 0;
+ 
+                switch(err) {
+                        case GL_INVALID_OPERATION:      		error="INVALID_OPERATION"; nResult = GL_INVALID_OPERATION; 	break;
+                        case GL_INVALID_ENUM:           		error="INVALID_ENUM";      nResult = GL_INVALID_ENUM; 		break;
+                        case GL_INVALID_VALUE:          		error="INVALID_VALUE";          					 		break;
+                        case GL_OUT_OF_MEMORY:          		error="OUT_OF_MEMORY";          					  		break;
+                        case GL_INVALID_FRAMEBUFFER_OPERATION:  error="INVALID_FRAMEBUFFER_OPERATION";  			  		break;
+						default:								error="WTF ... UNKNOWN ERROR ...";
+                }
+				
+				LOG_MSG("### GL ERROR ###: %d [%s], (FILE: %s >> LINE: %d) ",nResult, error.c_str(),file,line );
+				err=glGetError();				
+                
+        }
+}
+/* ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 static void ogl_get_depth(voodoo_state* VV, INT32 ITERZ, INT64 ITERW, INT32 *depthval, INT32 *out_wfloat)
 {
 	INT32 wfloat;
@@ -138,7 +310,7 @@ static void ogl_get_depth(voodoo_state* VV, INT32 ITERZ, INT64 ITERW, INT32 *dep
 		else
 		{
 			int exp = count_leading_zeros(temp);
-			wfloat = ((exp << 12) | ((~temp >> (19 - exp)) & 0xfff));
+			wfloat = ((exp << 12) | (INT32)(((~temp) >> (unsigned int)(19 - exp)) & 0xfffu));
 			if (wfloat < 0xffff) wfloat++;
 		}
 	}
@@ -150,17 +322,17 @@ static void ogl_get_depth(voodoo_state* VV, INT32 ITERZ, INT64 ITERW, INT32 *dep
 		*depthval = wfloat;
 	else
 	{
-		if ((ITERZ) & 0xf0000000)
+		if ((ITERZ) & 0xf0000000l)
 			*depthval = 0x0000;
 		else
 		{
-			UINT32 temp = (ITERZ) << 4;
-			if ((temp & 0xffff0000) == 0)
+			UINT32 temp = (UINT32)((ITERZ) << 4);
+			if ((temp & 0xffff0000ul) == 0)
 				*depthval = 0xffff;
 			else
 			{
 				int exp = count_leading_zeros(temp);
-				*depthval = ((exp << 12) | ((~temp >> (19 - exp)) & 0xfff));
+				*depthval = ((exp << 12) | (INT32)(((~temp) >> (unsigned int)(19 - exp)) & 0xfffu));
 				if (*depthval < 0xffff) (*depthval)++;
 			}
 		}
@@ -258,7 +430,7 @@ void ogl_get_vertex_data(INT32 x, INT32 y, const void *extradata, ogl_vertex_dat
 
 		INT64 oow;
 
-		UINT32 ilod = v->tmu[i].lodmin >> 8;
+		UINT32 ilod = (UINT32)(v->tmu[i].lodmin >> 8);
 		if (!((v->tmu[i].lodmask >> ilod) & 1))
 			ilod++;
 
@@ -297,9 +469,9 @@ void ogl_get_vertex_data(INT32 x, INT32 y, const void *extradata, ogl_vertex_dat
 		if (TEXMODE_CLAMP_NEG_W(texmode) && (iterw) < 0)
 			s = t = 0;
 
-		if (s != 0) vd->m[i].s = (float)((float)s/(float)(smax*(1<<(18+ilod))));
+		if (s != 0) vd->m[i].s = (float)((float)s/(float)(smax*(1u<<(18u+ilod))));
 		else vd->m[i].s = 0.0f;
-		if (t != 0) vd->m[i].t = (float)((float)t/(float)(tmax*(1<<(18+ilod))));
+		if (t != 0) vd->m[i].t = (float)((float)t/(float)(tmax*(1u<<(18u+ilod))));
 		else vd->m[i].t = 0.0f;
 		if (iterw != 0) vd->m[i].w = (float)((float)iterw/(float)(0xffffff));
 		else vd->m[i].w = 0.0f;
@@ -428,9 +600,9 @@ void ogl_cache_texture(const poly_extra_data *extra, ogl_texture_data *td) {
 	if (v->tmu[1].ram != NULL) num_tmus++;
 
 	for (UINT32 j=0; j<num_tmus; j++) {
-		TEXMODE = j==0 ? extra->r_textureMode0 : extra->r_textureMode1;
+		TEXMODE = (UINT32)(j==0 ? extra->r_textureMode0 : extra->r_textureMode1);
 
-		UINT32 ilod = v->tmu[j].lodmin >> 8;
+		UINT32 ilod = (UINT32)(v->tmu[j].lodmin >> 8);
 		if (!((v->tmu[j].lodmask >> ilod) & 1))
 			ilod++;
 
@@ -473,31 +645,41 @@ void ogl_cache_texture(const poly_extra_data *extra, ogl_texture_data *td) {
 				valid_texid = false;
 			}
 			if (!valid_texid) {
-				smax = (v->tmu[j].wmask >> ilod) + 1;
-				tmax = (v->tmu[j].hmask >> ilod) + 1;
+				smax = (INT32)(v->tmu[j].wmask >> ilod) + 1;
+				tmax = (INT32)(v->tmu[j].hmask >> ilod) + 1;
 
 				UINT32 texboffset = texbase;
 				texrgbp = (UINT32 *)&texrgb[0];
-				memset(texrgbp,0,256*256*4);
+				memset(texrgbp,0,smax*tmax*4);
 
 				if (!reuse_id) {
 					texID = ogl_texture_index++;
 					glGenTextures(1, &texID);
 				}
 
-				if (TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u) < 8) {
-					//LOG_MSG("TEXMODE_FORMAT");
-					if (TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u) != 5) {
-						//LOG_MSG("TEXMODE_FORMAT 1");
+				int format = TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u);
+				switch (format)			
+				{			
+					case 1:
+					case 2:
+					case 3:
+					case 4:
+					case 6:
+					case 7:
+					case 8:
+					case 9:
+					{											
 						for (int i=0; i<(smax*tmax); i++) {
 							UINT8 *texptr8 = (UINT8 *)&v->tmu[j].ram[(texboffset) & v->tmu[j].mask];
 							UINT32 data = v->tmu[j].lookup[*texptr8];
 							*texrgbp = data;
 							texboffset++;
 							texrgbp++;
-						}
-					} else {
-							//LOG_MSG("TEXMODE_FORMAT 2");						
+						}						
+						break;
+					}
+					case 5:
+					{
 						for (int i=0; i<(smax*tmax); i++) {
 
 							UINT8 *texptr8 = (UINT8 *)&v->tmu[j].ram[(texboffset) & v->tmu[j].mask];
@@ -507,56 +689,140 @@ void ogl_cache_texture(const poly_extra_data *extra, ogl_texture_data *td) {
 							texboffset++;
 							texrgbp++;
 						}
+						break;
 					}
-				} else if (TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u) >= 10 && TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u) <= 12) {
-						//LOG_MSG("TEXMODE_FORMAT 3");					
-					for (int i=0; i<(smax*tmax); i++) {
-						UINT16 *texptr16 = (UINT16 *)&v->tmu[j].ram[(texboffset) & v->tmu[j].mask];
-						UINT32 data = v->tmu[j].lookup[*texptr16];
-						*texrgbp = data;
-						texboffset+=2;
-						texrgbp++;
+					case 10:
+					case 11:
+					case 12:
+					{
+						for (int i=0; i<(smax*tmax); i++) {
+							UINT16 *texptr16 = (UINT16 *)&v->tmu[j].ram[(texboffset) & v->tmu[j].mask];
+							UINT32 data = v->tmu[j].lookup[*texptr16];
+							*texrgbp = data;
+							texboffset+=2;
+							texrgbp++;
+						}
+						break;						
 					}
-				} else if (TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u) != 14) {
-					//LOG_MSG("TEXMODE_FORMAT 4");
-					for (int i=0; i<(smax*tmax); i++) {
-						UINT16 *texptr16 = (UINT16 *)&v->tmu[j].ram[(texboffset) & v->tmu[j].mask];
-						UINT32 data = (v->tmu[j].lookup[*texptr16 & 0xFF] & 0xFFFFFF) | ((*texptr16 & 0xff00) << 16);
-						*texrgbp = data;
-						texboffset+=2;
-						texrgbp++;
-					}
-				} else {
-						//LOG_MSG("TEXMODE_FORMAT 5");					
-					for (int i=0; i<(smax*tmax); i++) {
+					case 13:
+					case 15:
+					{
+						for (int i=0; i<(smax*tmax); i++) {
 
-						UINT16 *texptr16 = (UINT16 *)&v->tmu[j].ram[(texboffset) & v->tmu[j].mask];
-						UINT16 texel1 = *texptr16 & 0xFF;
-						UINT32 data = (v->tmu[j].lookup[texel1] & 0xFFFFFF) | ((*texptr16 & 0xff00) << 16);
-						*texrgbp = data;
-						texboffset+=2;
-						texrgbp++;
+							UINT16 *texptr16 = (UINT16 *)&v->tmu[j].ram[(texboffset) & v->tmu[j].mask];
+							UINT16 texel1 = *texptr16 & 0xFF;
+							UINT32 data = (v->tmu[j].lookup[texel1] & 0xFFFFFF) | ((*texptr16 & 0xff00) << 16);
+							*texrgbp = data;
+							texboffset+=2;
+							texrgbp++;
+						}						
+						break;
+					}
+					case 14:					
+					{
+						for (int i=0; i<(smax*tmax); i++) {
+							UINT16 *texptr16 = (UINT16 *)&v->tmu[j].ram[(texboffset) & v->tmu[j].mask];
+							UINT32 data = (v->tmu[j].lookup[*texptr16 & 0xFF] & 0xFFFFFF) | ((*texptr16 & 0xff00) << 16);
+							*texrgbp = data;
+							texboffset+=2;
+							texrgbp++;
+						}						
+						break;
+					}
+					default:
+						LOG_MSG("texid %d format %d not found -- %d x %d",texID,format,smax,tmax);					
+					
+				}
+				
+				glBindTexture(GL_TEXTURE_2D, 0);
+				
+				texrgbp = (UINT32 *)&texrgb[0];
+				glBindTexture(GL_TEXTURE_2D, texID);			
+				glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_PRIORITY, 0.0);
+				glPixelStorei(GL_UNPACK_CLIENT_STORAGE_APPLE, 1);						
+				
+				switch(sdl.opengl.GL_filtering){
+						case 1:
+						{
+							/* Point     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+							glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+							glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);						
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,TEXMODE_CLAMP_S(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,TEXMODE_CLAMP_T(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);
+							break;
+						}	
+						case 2:
+						{
+							// /* bilinear  /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+							glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+							glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);						
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,TEXMODE_CLAMP_S(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,TEXMODE_CLAMP_T(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);
+							break;
+						}	
+						case 3:
+						{
+							// /* Original Settings *
+							// /* Trilinear /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/							
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,TEXMODE_CLAMP_S(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,TEXMODE_CLAMP_T(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);						
+							break;	
+						}	
+						case 4:					
+						{
+							// /*  Anisotropic //////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/	
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,TEXMODE_CLAMP_S(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,TEXMODE_CLAMP_T(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);					
+							break;
+						}	
+						case 5:
+						{						
+							// /*  Anisotropic //////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/											
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,TEXMODE_CLAMP_S(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);
+							glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,TEXMODE_CLAMP_T(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);					
+							break;					
+						}
+						case 0:
+						default:			
+							break;												
+				}
+					
+				if (GL_EXT_texture_filter_anisotropic){}
+				
+				if ((sdl.opengl.GL_filtering==4) || (sdl.opengl.GL_filtering==5)){
+					
+					glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &sdl.opengl.Anisotropic_Level);	
+					glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, sdl.opengl.Anisotropic_Level);
+					
+				} else {								
+					if ((sdl.opengl.GL_filtering==1) || (sdl.opengl.GL_filtering==2)){
+						
+						sdl.opengl.Anisotropic_Level = 0.0;
+						glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &sdl.opengl.Anisotropic_Level);	
+						glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, sdl.opengl.Anisotropic_Level);
+						
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);					
 					}
 				}
-
-				texrgbp = (UINT32 *)&texrgb[0];
-				//LOG_MSG("texid %d format %d -- %d x %d",texID,TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u),smax,tmax);
-
-				glBindTexture(GL_TEXTURE_2D, texID);			
-				glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,TEXMODE_CLAMP_S(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);
-				glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,TEXMODE_CLAMP_T(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);
+				
+				
 			
-				
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, smax, tmax, 0, GL_BGRA_EXT, GL_UNSIGNED_INT_8_8_8_8_REV, texrgbp);
-				
-				//int texsize=2 << int_log2(sdl.pciW > sdl.pciW ? sdl.pciW : sdl.pciW);
-				//sdl.opengl.framebuf=calloc(1, texsize*texsize*4);		//32 bit color				
-				//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, texsize, texsize, 0, GL_BGRA, GL_UNSIGNED_BYTE, sdl.opengl.framebuf);
-				
-				extern PFNGLGENERATEMIPMAPEXTPROC glGenerateMipmapEXT;
-				glGenerateMipmapEXT(GL_TEXTURE_2D);
+			
+				//glCheck( glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, smax, tmax, 0, GL_BGRA_EXT, GL_UNSIGNED_INT_8_8_8_8_REV, texrgbp));
+				//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, smax, tmax, 0, GL_BGRA, GL_UNSIGNED_BYTE, texrgbp);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, smax, tmax, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, texrgbp);
+			
+				//glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, smax, tmax,GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, texrgbp);
+							
+								
+				glGenerateMipmapEXT(GL_TEXTURE_2D);				
 				UINT32 palsum=0;
 				if ((TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u)==0x05) || (TEXMODE_FORMAT(v->tmu[j].reg[textureMode].u)==0x0e)) {
 					palsum = calculate_palsum(j);
@@ -575,6 +841,7 @@ void ogl_cache_texture(const poly_extra_data *extra, ogl_texture_data *td) {
 										texID, NULL };
 					textures[j][texbase] = tex;
 				}
+				glBindTexture(GL_TEXTURE_2D, 0); // Unbind the texture to avoid accidental editing of texture elsewhere
 			}
 
 			td[j].texID = texID;
@@ -582,6 +849,7 @@ void ogl_cache_texture(const poly_extra_data *extra, ogl_texture_data *td) {
 		} else {
 			td[j].enable = false;
 		}
+		
 	}
 }
 
@@ -610,7 +878,7 @@ void ogl_printInfoLog(GLhandleARB obj)
 
     if (infologLength > 0)
     {
-		infoLog = (char *)malloc(infologLength);
+		infoLog = (char *)malloc((size_t)infologLength);
 		glGetInfoLogARB(obj, infologLength, &charsWritten, infoLog);
 		LOG_MSG("VOODOO: %s\n",infoLog);
 		free(infoLog);
@@ -724,6 +992,7 @@ void ogl_sh_tex_combine(std::string *strFShader, const int TMU, const poly_extra
 void ogl_sh_color_path(std::string *strFShader, const poly_extra_data *extra) {
 	voodoo_state *v=(voodoo_state*)extra->state;
 
+	
 	UINT32 FBZCOLORPATH = v->reg[fbzColorPath].u;
 	UINT32 FBZMODE = v->reg[fbzMode].u;
 	UINT32 ALPHAMODE = v->reg[alphaMode].u;
@@ -732,21 +1001,26 @@ void ogl_sh_color_path(std::string *strFShader, const poly_extra_data *extra) {
 	{
 	case 0:
 		*strFShader += "  cother = gl_Color;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 1:
 		*strFShader += "  cother = texel;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use" __FILE__ ":%d", __LINE__);}	
 		break;
 	case 2:
 		*strFShader += "  cother = color1;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	default:
 		*strFShader += "  cother = vec4(0.0);\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 	}
 
 	// TODO fix chroma key //
 	if (FBZMODE_ENABLE_CHROMAKEY(FBZMODE)) {
 //		if (!CHROMARANGE_ENABLE(v->reg[chromaRange].u))
 			*strFShader +=	"  if (distance (cother.rgb , chromaKey.rgb) < 0.0001) discard;\n";
+			if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 //		else {
 //			*strFShader +=	"  if ((cother.rgb >= (chromaKey.rgb-0.01)) && (cother.rgb <= (chromaRange.rgb+0.01))) discard;";
 //		}
@@ -757,15 +1031,25 @@ void ogl_sh_color_path(std::string *strFShader, const poly_extra_data *extra) {
 	{
 	case 0:
 		*strFShader += "  cother.a = gl_Color.a;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 1:
 		*strFShader += "  cother.a = texel.a;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 2:
-		*strFShader += "  cother.a = color1.a;\n";
+		/* Fix F1'97 Massice Grafic Glitch */
+		if (sdl.opengl.sh_FbzcpCca_Sw2){
+			*strFShader += "  cother.a = color1.a;\n";
+			if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+		}else{
+			*strFShader += "  cother.a = gl_Color.a;\n";
+			if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+		}
 		break;
 	default:
 		*strFShader += "  cother.a = 0.0;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	}
 
@@ -777,26 +1061,33 @@ void ogl_sh_color_path(std::string *strFShader, const poly_extra_data *extra) {
 		switch (ALPHAMODE_ALPHAFUNCTION(ALPHAMODE)) {
 			case 0:
 				*strFShader += "  discard;\n";
+				if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 				break;
 			case 1:
 				*strFShader += "  if (cother.a >= alphaRef) discard;\n";
+				if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 				break;
 			case 2:
 //				*strFShader += "  if (cother.a != alphaRef) discard;\n";
 				*strFShader += "  if (distance(cother.a , alphaRef) > 0.0001) discard;\n";
+				if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 				break;
 			case 3:
 				*strFShader += "  if (cother.a >  alphaRef) discard;\n";
+				if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 				break;
 			case 4:
 				*strFShader += "  if (cother.a <= alphaRef) discard;\n";
+				if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 				break;
 			case 5:
 //				*strFShader += "  if (cother.a == alphaRef) discard;\n";
 				*strFShader += "  if (distance(cother.a , alphaRef) < 0.0001) discard;\n";
+				if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 				break;
 			case 6:
 				*strFShader += "  if (cother.a <  alphaRef) discard;\n";
+				if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 				break;
 			case 7:
 				break;
@@ -804,10 +1095,15 @@ void ogl_sh_color_path(std::string *strFShader, const poly_extra_data *extra) {
 
 	if (FBZCP_CC_LOCALSELECT_OVERRIDE(FBZCOLORPATH) == 0)
 	{
-		if (FBZCP_CC_LOCALSELECT(FBZCOLORPATH) == 0)
+		if (FBZCP_CC_LOCALSELECT(FBZCOLORPATH) == 0){			
 			*strFShader += "  clocal = gl_Color;\n";
+			if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+		}
 		else
+		{
 			*strFShader += "  clocal = color0;\n";
+			if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+		}
 	}
 	else
 	{
@@ -816,6 +1112,7 @@ void ogl_sh_color_path(std::string *strFShader, const poly_extra_data *extra) {
 						"  } else {\n"
 							"    clocal = color0;\n"
 						"  }\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}							
 	}
 
 	switch (FBZCP_CCA_LOCALSELECT(FBZCOLORPATH))
@@ -823,55 +1120,84 @@ void ogl_sh_color_path(std::string *strFShader, const poly_extra_data *extra) {
 	default:
 	case 0:
 		*strFShader += "  clocal.a = gl_Color.a;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 1:
 		*strFShader += "  clocal.a = color0.a;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 2:
 		*strFShader += "  clocal.a = gl_Color.a;\n"; // TODO CLAMPED_Z
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 3:
 		// voodoo2 only
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	}
 
 	if (FBZCP_CC_ZERO_OTHER(FBZCOLORPATH) == 0)
+	{
 		*strFShader += "  tt.rgb = cother.rgb;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+	}
 	else
+	{
 		*strFShader += "  tt.rgb = vec3(0.0);\n";
-
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+	}
+	
 	if (FBZCP_CCA_ZERO_OTHER(FBZCOLORPATH) == 0)
+	{
 		*strFShader += "  tt.a = cother.a;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+	}
 	else
+	{
 		*strFShader += "  tt.a = 0.0;\n";
-
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+	}
+	
 	if (FBZCP_CC_SUB_CLOCAL(FBZCOLORPATH))
+	{
 		*strFShader += "  tt.rgb -= clocal.rgb;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+	}
 
 	if (FBZCP_CCA_SUB_CLOCAL(FBZCOLORPATH))
+	{
 		*strFShader += "  tt.a -= clocal.a;\n";
-
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+	}
+	
+	
 	switch (FBZCP_CC_MSELECT(FBZCOLORPATH))
 	{
 	default:
 	case 0:
 		*strFShader += "  blend.rgb = vec3(0.0);\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 1:
 		*strFShader += "  blend.rgb = clocal.rgb;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 2:
 		*strFShader += "  blend.rgb = vec3(cother.a);\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 3:
 		*strFShader += "  blend.rgb = vec3(clocal.a);\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 4:
 		*strFShader += "  blend.rgb = vec3(texel.a);\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 5:
 		// voodoo2 only
 		*strFShader += "  blend.rgb = texel.rgb;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	}
 
@@ -880,26 +1206,37 @@ void ogl_sh_color_path(std::string *strFShader, const poly_extra_data *extra) {
 	default:
 	case 0:
 		*strFShader += "  blend.a = 0.0;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 1:
 		*strFShader += "  blend.a = clocal.a;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 2:
 		*strFShader += "  blend.a = cother.a;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 3:
 		*strFShader += "  blend.a = clocal.a;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 4:
 		*strFShader += "  blend.a = texel.a;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	}
 
 	if (!FBZCP_CC_REVERSE_BLEND(FBZCOLORPATH))
+	{		
 		*strFShader += "  blend.rgb = vec3(1.0) - blend.rgb;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+	}
 
 	if (!FBZCP_CCA_REVERSE_BLEND(FBZCOLORPATH))
+	{
 		*strFShader += "  blend.a = 1.0 - blend.a;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+	}
 
 	*strFShader += "  tt *= blend;\n";
 
@@ -910,24 +1247,34 @@ void ogl_sh_color_path(std::string *strFShader, const poly_extra_data *extra) {
 		break;
 	case 1:
 		*strFShader += "  tt.rgb += clocal.rgb;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	case 2:
 		*strFShader += "  tt.rgb += vec3(clocal.a);\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
 		break;
 	}
 
 	if (FBZCP_CCA_ADD_ACLOCAL(FBZCOLORPATH))
+	{
 		*strFShader += "  tt.a += clocal.a;\n";
-
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+	}
 	// clamp ?? //
 
 	*strFShader += "  pixel = tt;\n";
 
 	if (FBZCP_CC_INVERT_OUTPUT(FBZCOLORPATH))
+	{
 		*strFShader += "  pixel.rgb = vec3(1.0) - tt.rgb;\n";
-
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+	}
+	
 	if (FBZCP_CCA_INVERT_OUTPUT(FBZCOLORPATH))
+	{
 		*strFShader += "  pixel.a = 1.0 - tt.a;\n";
+		if (bUseShColPathInfo){LOG_MSG("OGL Shader Color Path Line in Use (" __FILE__ ") :%d", __LINE__);}	
+	}
 }
 
 void ogl_sh_fog(std::string *strFShader, const poly_extra_data *extra) {
@@ -987,6 +1334,7 @@ void ogl_sh_fog(std::string *strFShader, const poly_extra_data *extra) {
 
 
 void ogl_shaders(const poly_extra_data *extra) {
+	
 	voodoo_state *v=(voodoo_state*)extra->state;
 
 	GLint res;
@@ -994,8 +1342,10 @@ void ogl_shaders(const poly_extra_data *extra) {
 
 	/* shaders extensions not loaded */
 	if (!glCreateShaderObjectARB) return;
+	
+	
 
-	UINT32 FBZMODE      = extra->r_fbzMode;
+//	UINT32 FBZMODE      = extra->r_fbzMode;
 	UINT32 FOGMODE      = extra->r_fogMode;
 	UINT32 texcount     = extra->texcount;
 
@@ -1006,7 +1356,9 @@ void ogl_shaders(const poly_extra_data *extra) {
 		int fcount=0;
 		while (glGetError()!=0) {
 			fcount++;
-			if (fcount>1000) E_Exit("opengl error");
+			if (fcount>1000){
+				E_Exit("VOODOO: opengl error");	
+			}
 		}
 
 		GLhandleARB m_hVertexShader = glCreateShaderObjectARB(GL_VERTEX_SHADER_ARB);
@@ -1040,6 +1392,8 @@ void ogl_shaders(const poly_extra_data *extra) {
 			glGetInfoLogARB(m_hVertexShader, 999, &infobufferlen, infobuffer);
 			infobuffer[infobufferlen] = 0;
 			ogl_printInfoLog(m_hVertexShader);
+			LOG_MSG("E_Exit ERROR: Error compiling vertex shader");
+			SDL_Delay(2000);
 			E_Exit("ERROR: Error compiling vertex shader");
 			return;
 		}
@@ -1106,6 +1460,8 @@ void ogl_shaders(const poly_extra_data *extra) {
 		glGetObjectParameterivARB(m_hFragmentShader, GL_OBJECT_COMPILE_STATUS_ARB, &res);
 		if(res == 0) {
 			ogl_printInfoLog(m_hFragmentShader);
+			LOG_MSG("ERROR: Error compiling fragment shader");
+			SDL_Delay(2000);
 			E_Exit("ERROR: Error compiling fragment shader");
 			return;
 		}
@@ -1122,6 +1478,8 @@ void ogl_shaders(const poly_extra_data *extra) {
 		glGetObjectParameterivARB(m_hProgramObject, GL_OBJECT_LINK_STATUS_ARB, &res);
 		if(res == 0) {
 			ogl_printInfoLog(m_hProgramObject);
+			LOG_MSG("ERROR: Error linking program");	
+			SDL_Delay(2000);			
 			E_Exit("ERROR: Error linking program");
 			return;
 		}
@@ -1136,6 +1494,8 @@ void ogl_shaders(const poly_extra_data *extra) {
 
 		GLenum glerr=glGetError();
 		if (glerr!=0) {
+			LOG_MSG("create shader start glError->%x",glerr);			
+			SDL_Delay(2000);
 			E_Exit("create shader start glError->%x",glerr);
 		}
 
@@ -1186,7 +1546,7 @@ void voodoo_ogl_draw_triangle(poly_extra_data *extra) {
 
 	UINT32 ALPHAMODE = extra->r_alphaMode;
 	UINT32 FBZMODE   = extra->r_fbzMode;
-
+	
 
 	ogl_get_vertex_data(v->fbi.ax, v->fbi.ay, (void*)extra, &vd[0]);
 	ogl_get_vertex_data(v->fbi.bx, v->fbi.by, (void*)extra, &vd[1]);
@@ -1198,6 +1558,8 @@ void voodoo_ogl_draw_triangle(poly_extra_data *extra) {
 			glUseProgramObjectARB(0);
 			m_hProgramObject = 0;
 		}
+		
+		
 
 		if ((FBZMODE_ENABLE_DEPTHBUF(FBZMODE)) && (FBZMODE_ENABLE_ALPHA_PLANES(FBZMODE) == 0)) {
 			VOGL_SetDepthMode(1,FBZMODE_DEPTH_FUNCTION(FBZMODE));
@@ -1221,7 +1583,8 @@ void voodoo_ogl_draw_triangle(poly_extra_data *extra) {
 		glStencilFunc(GL_ALWAYS, 1, 1);
 		glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
 
-		glBegin(GL_TRIANGLES);
+		//glBegin(GL_TRIANGLES);
+		VOGL_BeginMode(GL_TRIANGLES);
 
 		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
@@ -1229,60 +1592,155 @@ void voodoo_ogl_draw_triangle(poly_extra_data *extra) {
 		for (int i=0;i<3;i++)
 			glVertex3f(vd[i].x, vd[i].y, depth);
 
-		glEnd();
+		//glEnd();
+		VOGL_ClearBeginMode();
 	}
 
+	
+	
 	ogl_cache_texture(extra,td);
 	ogl_shaders(extra);
 
+	
+	
 	if (extra->texcount > 0) {
-		for (int t=0; t<2; t++)
+		for (unsigned int t=0; t<2; t++)
 		if ( td[t].enable ) {
 			UINT32 TEXMODE = v->tmu[t].reg[textureMode].u;
 			glActiveTexture(GL_TEXTURE0_ARB+t);
 			glBindTexture (GL_TEXTURE_2D, td[t].texID);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_PRIORITY, 0.0);
+
+			
 			if (!extra->info->shader_ready) {
 				glEnable (GL_TEXTURE_2D);
 				// TODO proper fixed-pipeline combiners
 				glTexEnvi (GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 			} else {
-				if (extra->info->shader_ulocations[6+t] >= 0)
-					glUniform1iARB(extra->info->shader_ulocations[6+t],t);
-			}
+				if (extra->info->shader_ulocations[6+t] >= 0){
+					glUniform1iARB(extra->info->shader_ulocations[6+t],(GLint)t);
+				}
+			}			
 
-			//LOG_MSG("VOODOO: Switch opengl.GL_filtering %d",set_OpenGLFilter);	
-			//v->fbi.width = sdl.pciW;
-			//v->fbi.height = sdl.pciH;			
-			switch(sdl.opengl.GL_filtering){
+			/* Setting the Right Wrappping Texture Coord. *//////////////////////////////////////////////////////////////////////////////////////
+			switch(TEXMODE_CLAMP_S(TEXMODE))
+				{						
+					case 0:
+					{
+						// 1943659767 = Fix for F1'97, Need GL_CLAMP_TO_EDGE
+						if (TEXMODE==-1943659767){
+							sdl.opengl.gl_wrap_s = GL_CLAMP_TO_EDGE;
+						} else {
+						    sdl.opengl.gl_wrap_s = GL_REPEAT;	
+						}
+					}
+					break;
+					case 1:
+					{
+						sdl.opengl.gl_wrap_t = GL_REPEAT;
+					}
+					break;
+					default:
+						sdl.opengl.gl_wrap_s = GL_REPEAT;	
+						//LOG_MSG("TEXMODE_CLAMP_S(TEXMODE) %d - , Using: %d, TEXMODE=%d",TEXMODE_CLAMP_S(TEXMODE),sdl.opengl.gl_wrap_s,TEXMODE);		
+				}					
+					
+			/* Setting the Right Wrappping Texture Coord. *//////////////////////////////////////////////////////////////////////////////////////					
+			switch(TEXMODE_CLAMP_T(TEXMODE))
+			{						
+				case 0:
+				{
+					if (TEXMODE==-1943659767){
+						sdl.opengl.gl_wrap_t = GL_CLAMP_TO_EDGE;
+					} else {
+					    sdl.opengl.gl_wrap_t = GL_REPEAT;	
+					}
+				}
+				break;
 				case 1:
+				{
+					sdl.opengl.gl_wrap_t = GL_REPEAT;
+				}
+				break;
+				default:
+					sdl.opengl.gl_wrap_s = GL_REPEAT;	
+				//LOG_MSG("TEXMODE_CLAMP_S(TEXMODE) %d - , Using: %d, TEXMODE=%d",TEXMODE_CLAMP_S(TEXMODE),sdl.opengl.gl_wrap_s,TEXMODE);		
+				}
+					
+			switch(sdl.opengl.GL_filtering){
+				
+				case 1:
+					/* Point     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+					glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAX_ANISOTROPY_EXT,1);
 					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);						
+					glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,sdl.opengl.gl_wrap_s);
+					glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,sdl.opengl.gl_wrap_t);		
 					break;
 					
 				case 2:
+					// /* bilinear  /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+					glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAX_ANISOTROPY_EXT,1);
 					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+					glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,sdl.opengl.gl_wrap_s);
+					glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,sdl.opengl.gl_wrap_t);					
+					// glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,TEXMODE_CLAMP_S(TEXMODE)?GL_CLAMP_TO_EDGE:sdl.opengl.gl_wrap_s);
+					// glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,TEXMODE_CLAMP_T(TEXMODE)?GL_CLAMP_TO_EDGE:sdl.opengl.gl_wrap_t);					
 					break;
 					
 				case 3:
-					sdl.opengl.minFilter = GL_LINEAR + TEXMODE_MINIFICATION_FILTER(TEXMODE);
-					if (v->tmu[t].lodmin != v->tmu[t].lodmax)		
-						sdl.opengl.minFilter += 0x100 + TEXMODE_TRILINEAR(TEXMODE)*sdl.opengl.TrilinearAmount;						
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, sdl.opengl.minFilter);				
-						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR+TEXMODE_MAGNIFICATION_FILTER(TEXMODE));					
+						// /* Original Settings *
+						// /* Trilinear /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/					
+						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAX_ANISOTROPY_EXT,1);
+						minFilter = (int)GL_NEAREST + (int)TEXMODE_MINIFICATION_FILTER(TEXMODE);
+						if (v->tmu[t].lodmin != v->tmu[t].lodmax)
+							minFilter += 0x0100 + (int)TEXMODE_TRILINEAR(TEXMODE) * 2;
+						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,minFilter);
+						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,(int)GL_NEAREST+(int)TEXMODE_MAGNIFICATION_FILTER(TEXMODE));
+						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,sdl.opengl.gl_wrap_s);
+						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,sdl.opengl.gl_wrap_t);						
+						// glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,TEXMODE_CLAMP_S(TEXMODE)?GL_CLAMP_TO_EDGE:sdl.opengl.gl_wrap_s);
+						// glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,TEXMODE_CLAMP_T(TEXMODE)?GL_CLAMP_TO_EDGE:sdl.opengl.gl_wrap_t);					
+						break;	
+					
+				case 4:					
+					// /*  Anisotropic //////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+						minFilter = (int)GL_NEAREST + (int)TEXMODE_MINIFICATION_FILTER(TEXMODE);
+						if (v->tmu[t].lodmin != v->tmu[t].lodmax){					
+							minFilter += 0x0100 + (int)TEXMODE_TRILINEAR(TEXMODE) * 2;
+						}					
+						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,minFilter);
+						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,(int)GL_NEAREST+(int)TEXMODE_MAGNIFICATION_FILTER(TEXMODE));
+							
+						// glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,TEXMODE_CLAMP_S(TEXMODE)?GL_CLAMP_TO_EDGE:sdl.opengl.gl_wrap_s);
+						// glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,TEXMODE_CLAMP_T(TEXMODE)?GL_CLAMP_TO_EDGE:sdl.opengl.gl_wrap_t);					
+						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,sdl.opengl.gl_wrap_s);
+						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,sdl.opengl.gl_wrap_t);						
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_ALWAYS);																												
 					break;
 					
+				case 5:					
+					// /*  TestMode //////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+						if (v->tmu[t].lodmin != v->tmu[t].lodmax){
+							glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_LOD, v->tmu[t].lodmin);
+							glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LOD, v->tmu[t].lodmax);						
+						}					
+						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+							
+						// glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,TEXMODE_CLAMP_S(TEXMODE)?GL_CLAMP_TO_EDGE:sdl.opengl.gl_wrap_s);
+						// glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,TEXMODE_CLAMP_T(TEXMODE)?GL_CLAMP_TO_EDGE:sdl.opengl.gl_wrap_t);
+						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,sdl.opengl.gl_wrap_s);
+						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,sdl.opengl.gl_wrap_t);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_ALWAYS);				
+					break;					
 				case 0:
-				default:
-					sdl.opengl.minFilter = GL_NEAREST + TEXMODE_MINIFICATION_FILTER(TEXMODE);
-					if (v->tmu[t].lodmin != v->tmu[t].lodmax)
-						sdl.opengl.minFilter += 0x0100 + TEXMODE_TRILINEAR(TEXMODE)*sdl.opengl.TrilinearAmount;
-						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,sdl.opengl.minFilter);
-						glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST+TEXMODE_MAGNIFICATION_FILTER(TEXMODE));				
+				default:			
 					break;												
 			}
-			glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,TEXMODE_CLAMP_S(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);
-			glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,TEXMODE_CLAMP_T(TEXMODE)?GL_CLAMP_TO_EDGE:GL_REPEAT);
 		}
 	}
 
@@ -1335,18 +1793,18 @@ void voodoo_ogl_draw_triangle(poly_extra_data *extra) {
 	} else {
 		VOGL_SetDrawMode(false);
 		cached_line_back_y=-1;
+		
 	}
+	//glBegin(GL_TRIANGLES);
+	VOGL_BeginMode(GL_TRIANGLES);
 
-
-	glBegin(GL_TRIANGLES);
-
-	for (int i=0;i<3;i++) {
+	for (unsigned int i=0;i<3;i++) {
 		glColor4fv(&vd[i].r);
 
-		for (int t=0;t<2;t++)
+		for (unsigned int t=0;t<2;t++)
 			if (td[t].enable) {
 				vglMultiTexCoord4fvARB(GL_TEXTURE0_ARB+t,&vd[i].m[t].sw);
-				if (extra->info->shader_ulocations[10+t] >= 0)
+				if (extra->info->shader_ulocations[10u+t] >= 0)
 					glVertexAttrib1fARB(extra->info->shader_ulocations[10+t],vd[i].m[t].lodblend);
 			}
 
@@ -1356,7 +1814,8 @@ void voodoo_ogl_draw_triangle(poly_extra_data *extra) {
 		glVertex3fv(&vd[i].x);
 	}
 
-	glEnd();
+	//glEnd();
+	VOGL_ClearBeginMode();
 
 	if (FBZMODE_DEPTH_SOURCE_COMPARE(FBZMODE) && VOGL_CheckFeature(VOGL_HAS_STENCIL_BUFFER)) {
 		glDisable(GL_STENCIL_TEST);
@@ -1365,13 +1824,14 @@ void voodoo_ogl_draw_triangle(poly_extra_data *extra) {
 	if (!extra->info->shader_ready) {
 		glDisable (GL_TEXTURE_2D);
 	}
+	glBindTexture(GL_TEXTURE_2D, 0); // Unbind the texture to avoid accidental editing of texture elsewhere
 }
 
 
 void voodoo_ogl_swap_buffer() {
-	if (GFX_LazyFullscreenRequested()) {
-		v->ogl_dimchange = true;
-	}
+	//if (GFX_LazyFullscreenRequested()) {
+	//	v->ogl_dimchange = true;
+	//}
 
 	VOGL_ClearBeginMode();
 
@@ -1399,9 +1859,11 @@ void voodoo_ogl_texture_clear(UINT32 texbase, int TMU) {
 		}
 		textures[TMU].erase(t);
 	}
+	
 }
-
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void voodoo_ogl_draw_pixel(int x, int y, bool has_rgb, bool has_alpha, int r, int g, int b, int a) {
+	
 	GLfloat x2, y2;
 	if (m_hProgramObject != 0) {
 		glUseProgramObjectARB(0);
@@ -1409,6 +1871,7 @@ void voodoo_ogl_draw_pixel(int x, int y, bool has_rgb, bool has_alpha, int r, in
 	}
 
 	if (LFBMODE_WRITE_BUFFER_SELECT(v->reg[lfbMode].u)==0) {
+		
 		VOGL_SetDrawMode(true);
 		v->fbi.vblank_flush_pending=true;
 	} else {
@@ -1423,14 +1886,19 @@ void voodoo_ogl_draw_pixel(int x, int y, bool has_rgb, bool has_alpha, int r, in
 	VOGL_SetAlphaMode(0, 0,0,0,0);
 
 	x2 = (GLfloat) x + 0.5;
-	y2 = (GLfloat) y + 0.5;						
+	y2 = (GLfloat) y + 0.5;	
+
 	VOGL_BeginMode(GL_POINTS);
-	glColor4ub((GLubyte)(r&0xff), (GLubyte)(g&0xff), (GLubyte)(b&0xff), (GLubyte)(a&0xff));
-	glVertex2f(x2, y2);
+	{	
+		glColor4ub((GLubyte)(r&0xff), (GLubyte)(g&0xff), (GLubyte)(b&0xff), (GLubyte)(a&0xff));
+		glVertex2f(x2, y2);
+	}
+	
+	
 }
 
 void voodoo_ogl_draw_z(int x, int y, int z) {
-//	VOGL_ClearBeginMode();
+	VOGL_ClearBeginMode();
 
 	if (m_hProgramObject != 0) {
 		glUseProgramObjectARB(0);
@@ -1452,13 +1920,14 @@ void voodoo_ogl_draw_z(int x, int y, int z) {
 	VOGL_SetAlphaMode(0, 0,0,0,0);
 
 	VOGL_BeginMode(GL_POINTS);
-//	glBegin(GL_POINTS);
-	glVertex3i(x, y, z);	// z adjustment??
-//	glEnd();
+	{
+		glVertex3i(x, y, z);	// z adjustment??
+	}
+	
 }
 
 void voodoo_ogl_draw_pixel_pipeline(int x, int y, int r, int g, int b) {
-//	VOGL_ClearBeginMode();
+	VOGL_ClearBeginMode();
 	GLfloat x2, y2;
 
 	// TODO redo everything //
@@ -1493,105 +1962,124 @@ void voodoo_ogl_draw_pixel_pipeline(int x, int y, int r, int g, int b) {
 
 	x2 = (GLfloat) x + 0.5;
 	y2 = (GLfloat) y + 0.5;						
+	
 	VOGL_BeginMode(GL_POINTS);
-//	glBegin(GL_POINTS);
-//	glColor3f((float)r/255.0f, (float)g/255.0f, (float)b/255.0f);
-	glColor3ub((GLubyte)(r&0xff), (GLubyte)(g&0xff), (GLubyte)(b&0xff));
-	glVertex2f(x2, y2);
-//	glEnd();
-}
-
-
-void voodoo_ogl_clip_window(voodoo_state *v) {
-	VOGL_ClearBeginMode();
-
-	int sx = (v->reg[clipLeftRight].u >> 16) & 0x3ff;
-	int ex = (v->reg[clipLeftRight].u >> 0) & 0x3ff;
-	int sy = (v->reg[clipLowYHighY].u >> 16) & 0x3ff;
-	int ey = (v->reg[clipLowYHighY].u >> 0) & 0x3ff;
-
-	if (FBZMODE_Y_ORIGIN(v->reg[fbzMode].u)) {
-		sy = (v->fbi.yorigin+1 - sy) & 0x3ff;
-		ey = (v->fbi.yorigin+1 - ey) & 0x3ff;
+	{
+		glColor3ub((GLubyte)(r&0xff), (GLubyte)(g&0xff), (GLubyte)(b&0xff));
+		glVertex2f(x2, y2);
 	}
-
-	// LOG_MSG("voodoo_ogl_clip_window: %dx%d",v->fbi.width,v->fbi.height);
-	// if ((sx>0) || (sy>0) || (ex<v->fbi.width) || (ey<v->fbi.height))
-	// {
-		// glEnable(GL_SCISSOR_TEST);
-		// glScissor(sx,sy,ex-sx,ey-sy);
-	// } else {
-		// glScissor(0,0,v->fbi.width,v->fbi.height);
-		// glDisable(GL_SCISSOR_TEST);
-	// } 
+	
 }
 
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+void voodoo_ogl_clip_window(voodoo_state *v) {	
+    (void)v;//UNUSED
+}
 
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void voodoo_ogl_fastfill(void) {
+	
 	VOGL_ClearBeginMode();
-
 	VOGL_SetDepthMaskMode(true);
 
+	int w = 0;
+	int h = 0;	
 	int sx = (v->reg[clipLeftRight].u >> 16) & 0x3ff;
 	int ex = (v->reg[clipLeftRight].u >> 0) & 0x3ff;
 	int sy = (v->reg[clipLowYHighY].u >> 16) & 0x3ff;
 	int ey = (v->reg[clipLowYHighY].u >> 0) & 0x3ff;
+	
 
-//	if (FBZMODE_Y_ORIGIN(v->reg[fbzMode].u))
-	{
-		int tmp = (v->fbi.yorigin+1 - ey) & 0x3ff;
-		ey = (v->fbi.yorigin+1 - sy) & 0x3ff;
-		sy = tmp;
+	if (sdl.fullscreen){	
+		int w = sdl.pciFSW;
+		int h = sdl.pciFSH;			
+			
+	} else {		
+		int w = sdl.pciW;
+		int h = sdl.pciH;					
 	}
-
-	bool scissors_needed = true;
+	 
+	// if (FBZMODE_Y_ORIGIN(v->reg[fbzMode].u))
+	{		
+		int tmp = ((int)v->fbi.yorigin+1 - ey) & 0x3ff;
+		
+		if (sdl.opengl.a_ClipLowYHigh){ 
+			tmp = ((int)v->fbi.yorigin+1 - h) & 0x3ff;		
+		}
+		
+		ey  = ((int)v->fbi.yorigin+1 - sy) & 0x3ff;
+		sy  = tmp+sdl.opengl.n_ClipLowYHigh;		
+	}
+	
+	bool scissors_needed = sdl.opengl.glScissor_flag;
 	if ((sx == 0) && (sy == 0)) {
-		if (((Bitu)ex == (Bitu)v->fbi.width) && ((Bitu)ey == (Bitu)v->fbi.height)) scissors_needed = false;
+		
+		if (sdl.opengl.a_ClipLowYHigh){ 
+			if (((Bitu)ex == (Bitu)v->fbi.width) && ((Bitu)ey == (Bitu)h)) scissors_needed = false;
+		}else{
+			if (((Bitu)ex == (Bitu)v->fbi.width) && ((Bitu)ey == (Bitu)v->fbi.height)) scissors_needed = false;
+		}	
 	}
 
 	if (scissors_needed) {
 		glEnable(GL_SCISSOR_TEST);
-		glScissor(sx,sy,ex-sx,ey-sy);
+		
+		if (sdl.opengl.a_ClipLowYHigh){ 
+			glScissor(sx,sy,ex-sx,h-sy);
+		}else{
+			glScissor(sx,sy,ex-sx,ey-sy);
+		}
 	}
 
-
-	Bit32u clear_mask=0;
-	if (FBZMODE_RGB_BUFFER_MASK(v->reg[fbzMode].u)) {
+	Bit32u clear_mask = 0;
+	if (FBZMODE_RGB_BUFFER_MASK(v->reg[fbzMode].u)) {		
 		clear_mask|=GL_COLOR_BUFFER_BIT;
 
-//		if (FBZMODE_AUX_BUFFER_MASK(v->reg[fbzMode].u) && v->fbi.auxoffs != (UINT32)(~0)) ...
-		VOGL_SetColorMaskMode(true, true);
+		//if (FBZMODE_AUX_BUFFER_MASK(v->reg[fbzMode].u) && v->fbi.auxoffs != (UINT32)(~0))
+			VOGL_SetColorMaskMode(true, true);
 
-		if (last_clear_color!=v->reg[color1].u) {
-			glClearColor((float)v->reg[color1].rgb.r/255.0f,
-				(float)v->reg[color1].rgb.g/255.0f,
-				(float)v->reg[color1].rgb.b/255.0f,
-				(float)v->reg[color1].rgb.a/255.0f);
-			last_clear_color=v->reg[color1].u;
+			if (last_clear_color!=v->reg[color1].u) {
+				glClearColor((float)v->reg[color1].rgb.r/255.0f,
+							 (float)v->reg[color1].rgb.g/255.0f,
+							 (float)v->reg[color1].rgb.b/255.0f,
+							 (float)v->reg[color1].rgb.a/255.0f);
+				
+				last_clear_color=v->reg[color1].u;
+			}
+			
+			if (FBZMODE_DRAW_BUFFER(v->reg[fbzMode].u)==0) {
+				VOGL_SetDrawMode(true);
+				v->fbi.vblank_flush_pending=true;
+				cached_line_front_y=-1;
+			} else {
+				VOGL_SetDrawMode(false);
+				cached_line_back_y=-1;
+			}
 		}
-		if (FBZMODE_DRAW_BUFFER(v->reg[fbzMode].u)==0) {
-			VOGL_SetDrawMode(true);
-			v->fbi.vblank_flush_pending=true;
-			cached_line_front_y=-1;
-		} else {
-			VOGL_SetDrawMode(false);
-			cached_line_back_y=-1;
-		}
-	}
+	
+	
 	if (FBZMODE_AUX_BUFFER_MASK(v->reg[fbzMode].u) && v->fbi.auxoffs != (UINT32)(~0)) {
-	//if (FBZMODE_ENABLE_DEPTHBUF(v->reg[fbzMode].u)) {
-		clear_mask|=GL_DEPTH_BUFFER_BIT;
-		glClearDepth((float)((UINT16)v->reg[zaColor].u)/65535.0f);
+		//if (FBZMODE_ENABLE_DEPTHBUF(v->reg[fbzMode].u)) {
+			clear_mask|=GL_DEPTH_BUFFER_BIT;
+			glClearDepth((float)((UINT16)v->reg[zaColor].u)/65535.0f);
+		//}
 	}
 
-	if (clear_mask) glClear(clear_mask);
+	if (clear_mask){
+		glClear(clear_mask);
+	}
 
 	if (scissors_needed) {
-		glScissor(0,0,v->fbi.width,v->fbi.height);
+		
+		if (sdl.opengl.a_ClipLowYHigh){ 
+			glScissor(0,0,(int)v->fbi.width,(int)h);
+		}else{
+			glScissor(0,0,(int)v->fbi.width,(int)v->fbi.height);
+		}
 		glDisable(GL_SCISSOR_TEST);
 	}
 }
-
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void voodoo_ogl_clear(void) {
 	VOGL_ClearBeginMode();
 
@@ -1606,61 +2094,199 @@ void voodoo_ogl_clear(void) {
 	voodoo_ogl_swap_buffer();
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
-
-
-UINT32 voodoo_ogl_read_pixel(int x, int y) {
-	UINT32 data[2];
-	if ((x < 0) || (y < 0) || (x >= (INT32)v->fbi.width) || (y >= (INT32)v->fbi.height)) return 0xffffffff;
-
-	UINT32 mode=GL_RGBA;
-	switch (LFBMODE_READ_BUFFER_SELECT(v->reg[lfbMode].u)) {
-		case 0:			/* front buffer */
-			VOGL_SetReadMode(true);
-			if ((cached_line_front_y != y) || (x+1 >= cached_line_front_width)) {
-				if (cached_line_front_length<(INT32)v->fbi.width) {
-					if (cached_line_front_data!=NULL) free(cached_line_front_data);
-					size_t span_length=((v->fbi.width+64)&(~15));
-					cached_line_front_data=(UINT32*)malloc(sizeof(UINT32)*span_length);
-					cached_line_front_length=(INT32)span_length;
-				}
-				glReadPixels(0,v->fbi.height-y,v->fbi.width,1,mode,GL_UNSIGNED_BYTE,cached_line_front_data);
-				cached_line_front_y=y;
-				cached_line_front_width = (INT32)v->fbi.width;
-			}
-			data[0]=cached_line_front_data[x];
-			data[1]=cached_line_front_data[x+1];
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+void Voodoo_OGL_Read_Alloc(int LFBMode, INT32 Width){
+	
+	size_t span_length=((Width + 64u) & (~15u) );
+	
+	switch (LFBMode) {
+		case 0:
+		{
+			Cache.Line.Frnt.Buffer = (UINT32*) malloc( sizeof(UINT32)*span_length );
+			Cache.Line.Frnt.L      = (INT32)span_length;			
 			break;
-		case 1:			/* back buffer */
-			VOGL_SetReadMode(false);
-			if ((cached_line_back_y != y) || (x+1 >= cached_line_back_width)) {
-				if (cached_line_back_length<(INT32)v->fbi.width) {
-					if (cached_line_back_data!=NULL) free(cached_line_back_data);
-					size_t span_length=((v->fbi.width+64)&(~15));
-					cached_line_back_data=(UINT32*)malloc(sizeof(UINT32)*span_length);
-					cached_line_back_length=(INT32)span_length;
-				}
-				glReadPixels(0,v->fbi.height-y,v->fbi.width,1,mode,GL_UNSIGNED_BYTE,cached_line_back_data);
-				cached_line_back_y=y;
-				cached_line_back_width = (INT32)v->fbi.width;
-			}
-			data[0]=cached_line_back_data[x];
-			data[1]=cached_line_back_data[x+1];
+		}
+		case 1:
+		{
+			Cache.Line.Back.Buffer = (UINT32*) malloc( sizeof(UINT32)*span_length );
+			Cache.Line.Back.L      = (INT32)span_length;			
 			break;
-		case 2:			/* aux buffer */
-			mode=GL_DEPTH_COMPONENT;
-			VOGL_SetReadMode(false);
-			glReadPixels(x,v->fbi.height-y,2,1,mode,GL_UNSIGNED_INT,&data);
-			return ((data[0]>>16)&0xffff) | (data[1] & 0xffff0000);
-		default:
-			E_Exit("read from invalid buf %x",LFBMODE_READ_BUFFER_SELECT(v->reg[lfbMode].u));
-			break;
+		}
+	}							
+};
+
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+UINT32* Voodoo_OGL_Read_GlPix(GLint X, GLint Y, GLsizei Width, GLsizei Height, GLenum Format, GLenum Type, UINT32* data){
+	
+	glReadPixels(X,Y,Width,Height,Format,Type ,data);
+	return data;
+};
+
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+UINT32* Voodoo_OGL_Read_Clear(UINT32* nMemory) {
+	
+		if (nMemory != NULL) {
+			free(nMemory);
+		}
+		return nMemory;
+};
+
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+UINT32 Voodoo_OGL_Read_Back(GLint X, GLint Y, GLsizei Width, GLsizei Height, GLenum Format){
+
+	INT32 LFBMode = LFBMODE_READ_BUFFER_SELECT(v->reg[lfbMode].u);
+	
+	if ((Cache.Line.Back.Y != Y) || ( X+1 >= Cache.Line.Back.W) ) {
+			
+		if (Cache.Line.Back.L < Width) {
+								
+					Cache.Line.Back.Buffer = Voodoo_OGL_Read_Clear(Cache.Line.Back.Buffer);
+					                         Voodoo_OGL_Read_Alloc(LFBMode, Width);					
+		}
+		Voodoo_OGL_Read_GlPix(0, Height - Y, Width, 1, Format, GL_UNSIGNED_BYTE , Cache.Line.Back.Buffer);		
+		
+		Cache.Line.Back.Y = Y;				
+		Cache.Line.Back.W = Width;				
+	}		
+};
+
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+UINT32 Voodoo_OGL_Read_Front(GLint X, GLint Y, GLsizei Width, GLsizei Height, GLenum Format){
+
+	INT32 LFBMode = LFBMODE_READ_BUFFER_SELECT(v->reg[lfbMode].u);
+	
+	if ((Cache.Line.Frnt.Y != Y) || ( X+1 >= Cache.Line.Frnt.W) ) {
+			
+		if (Cache.Line.Frnt.L < Width) {
+								
+					Cache.Line.Frnt.Buffer = Voodoo_OGL_Read_Clear(Cache.Line.Frnt.Buffer);
+					                         Voodoo_OGL_Read_Alloc(LFBMode, Width);					
+		}
+		Voodoo_OGL_Read_GlPix(0, Height - Y, Width, 1, Format, GL_UNSIGNED_BYTE , Cache.Line.Frnt.Buffer);		
+		
+		Cache.Line.Frnt.Y = Y;				
+		Cache.Line.Frnt.W = Width;				
+	}		
+};
+
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+UINT32 voodoo_ogl_read_pixel(GLint x, GLint y) {
+			
+// format
+                    // Specifies the format of the pixel data.
+                    // The following symbolic values are accepted:
+                    // GL_COLOR_INDEX,
+                    // GL_STENCIL_INDEX,
+                    // GL_DEPTH_COMPONENT,
+                    // GL_RED,
+                    // GL_GREEN,
+                    // GL_BLUE,
+                    // GL_ALPHA,
+                    // GL_RGB,
+                    // GL_BGR,
+                    // GL_RGBA,
+                    // GL_BGRA,
+                    // GL_LUMINANCE, and
+                    // GL_LUMINANCE_ALPHA.
+                			
+	UINT32 data[2]; GLsizei w; GLsizei h; INT16 LFBReg = v->reg[lfbMode].u; GLenum Format = GL_RGBA;int xy;
+	
+	int LFBMode = LFBMODE_READ_BUFFER_SELECT(v->reg[lfbMode].u);	
+	GLubyte checkImage[v->fbi.width][v->fbi.height][3];
+	//LOG_MSG("[ ------- Read Buffer Select: %d (0x%x)",LFBReg,LFBReg);	
+	
+	if (sdl.fullscreen){ w = sdl.pciFSW; h = sdl.pciFSH;} else {w = sdl.pciW; 	h = sdl.pciH;}
+
+	
+	if ((x < 0) || (y < 0) || (x >= (GLsizei)v->fbi.width) || (y >= (GLsizei)v->fbi.height)){
+		return 0xffff;
 	}
-
-	return ((RGB_BLUE(data[0])>>3)<<11) | ((RGB_GREEN(data[0])>>2)<<5) | (RGB_RED(data[0])>>3) |
-			((RGB_BLUE(data[1])>>3)<<27) | ((RGB_GREEN(data[1])>>2)<<21) | ((RGB_RED(data[1])>>3)<<16);
+	
+	//LOG_MSG("[ LFBMode Read Buffer Select: %d (0x%x)",LFBMode,v->reg[lfbMode].u);		
+	switch (LFBMode) {
+		
+		case 0:	
+		{		
+			VOGL_SetReadMode(true);
+			/* Front Buffer used most for Intros/Movies */
+			switch(LFBReg){
+				case 0:
+				{					
+					Voodoo_OGL_Read_Front(x, y, v->fbi.width, v->fbi.height, Format);
+							
+					data[0] = Cache.Line.Frnt.Buffer[x];
+					data[1] = Cache.Line.Frnt.Buffer[x+1];
+					break;
+				}				
+				case 16:
+				/* Road To India */
+				{
+					
+					if ( (w == v->fbi.width) && (h = v->fbi.height) ){
+						Voodoo_OGL_Read_Front(x, y, v->fbi.width, v->fbi.height, Format);
+						data[0] = Cache.Line.Frnt.Buffer[x];
+						data[1] = Cache.Line.Frnt.Buffer[x+1];
+					}else{
+						/* Zoom Mismatch Avoid on High Resolutions */
+						return 0;
+					}
+					break;
+				}
+				default:
+				{
+					E_Exit("Unknown Front Buffer Register Access %d (0x%x)",LFBReg,LFBReg);					
+				}
+			}
+			break;
+		}	
+		case 1:
+		{				
+			VOGL_SetReadMode(false);				
+			switch(LFBReg){
+				case 0:
+				case 64:
+				/* Wrhammer - Dark Omen */
+				
+				case 80:
+				/* Flying Saucer */
+				{
+					Voodoo_OGL_Read_Back(x, y, v->fbi.width, v->fbi.height, Format);
+					data[0] = Cache.Line.Back.Buffer[x];
+					data[1] = Cache.Line.Back.Buffer[x+1];		
+					break;
+				}
+				
+				default:
+				{
+					E_Exit("Unknown Back Buffer Register Access %d (0x%x)",LFBReg,LFBReg);	
+				}
+			}
+			break;		
+		}	
+		case 2:
+		{	
+			VOGL_SetReadMode(false);
+			GLint X 	  = x;
+			GLint Y 	  = v->fbi.height - y;
+			GLsizei Width = 2;
+			GLsizei Height= 1;
+			Format        = GL_DEPTH_COMPONENT;
+			GLenum Type   = GL_UNSIGNED_INT;
+		
+			Voodoo_OGL_Read_GlPix(X, Y, Width, Height, Format, Type, (UINT32*)&data);
+		
+			return ( (data[0]>>16)&0xffff ) | ( data[1] & 0xffff0000 );
+		}	
+		default:
+			/* Reserved */
+			break;
+	}	
+		   
+	return ((RGB_BLUE(data[0])>>3)<<11) | ((RGB_GREEN(data[0])>>2)<<5)  |  (RGB_RED(data[0])>>3) |
+	       ((RGB_BLUE(data[1])>>3)<<27) | ((RGB_GREEN(data[1])>>2)<<21) | ((RGB_RED(data[1])>>3)<<16);
 }
 
-
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void voodoo_ogl_vblank_flush(void) {
 	VOGL_ClearBeginMode();
 	glFlush();
@@ -1774,98 +2400,188 @@ void vPCI_SDL_SetWindowMode(void){
 	
 }
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-void voodoo_ogl_set_window(voodoo_state *v) {
+
+void voodoo_ogl_set_GLShadeModel(void) {
 	
-		// /* Clear our buffer with a red background */
-		// glClearColor ( 1.0, 0.0, 0.0, 1.0 );
-		// glClear ( GL_COLOR_BUFFER_BIT );
-		// /* Swap our back buffer to the front */
-		// SDL_GL_SwapWindow(sdl.surface);
-		// /* Wait 2 seconds */
-		// ///SDL_Delay(500);
-
-		// /* Same as above, but green */
-		// glClearColor ( 0.0, 1.0, 0.0, 1.0 );
-		// glClear ( GL_COLOR_BUFFER_BIT );
-		// SDL_GL_SwapWindow(sdl.surface);
-		// //SDL_Delay(500);
-
-		// /* Same as above, but blue */
-		// glClearColor ( 0.0, 0.0, 1.0, 1.0 );
-		// glClear ( GL_COLOR_BUFFER_BIT );
-		// SDL_GL_SwapWindow(sdl.surface);
-		// //SDL_Delay(500);
+		if       (sdl.opengl.GL_ShadeModel==0){			
 		
-		// /* Same as above, but blue */
-		// glClearColor ( 1.0, 1.0, 1.0, 1.0 );
-		// glClear ( GL_COLOR_BUFFER_BIT );
-		// SDL_GL_SwapWindow(sdl.surface);
-		// //SDL_Delay(500);		
+		}else if (sdl.opengl.GL_ShadeModel==1){
+			glShadeModel(GL_FLAT);		
+			
+		}else if (sdl.opengl.GL_ShadeModel==2){			
+			glShadeModel(GL_SMOOTH);
+		}	
+};
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 
-		// /* Same as above, but blue */
-		// glClearColor ( 0.0, 0.0, 0.0, 1.0 );
-		// glClear ( GL_COLOR_BUFFER_BIT );
-		// SDL_GL_SwapWindow(sdl.surface);
-		// //SDL_Delay(500);	
+void voodoo_ogl_set_glViewport(void) {
+				
+		//if (GFX_LazyFullscreenRequested()){}
+
 		
-		// /* Same as above, but blue */
-		//glClearColor ( 1.0, 0.0, 0.0, 1.0 );
-		//glClear ( GL_COLOR_BUFFER_BIT );
-		//SDL_GL_SwapWindow(sdl.surface);
-		//SDL_Delay(500);			
+		if ( nScreenSetup  == true){
+			return;
+		}
 		
+		if (sdl.fullscreen){
+			if (sdl.ScrOpenGL_Flags & SDL_WINDOW_FULLSCREEN_DESKTOP){
+				/* Fullscreen Desktop Modus */
+				/* TODO
+				- Miss Calculate on Lower Screens
+				*/
+				SDL_DisplayMode displayMode;
+				SDL_GetDesktopDisplayMode(sdl.displaynumber, &displayMode);
+											
+				adjust_x = (displayMode.w - (GLsizei)sdl.pciFSW) /2;
+				adjust_y = (displayMode.h - (GLsizei)sdl.pciFSH) /2;						
+				glViewport( adjust_x, adjust_y, (GLsizei)sdl.pciFSW, (GLsizei)sdl.pciFSH );					
+			} else {		
+				 /* Fullscreen Own Screen Modus */
+				 /* Todo
+				  - Fullscreen Calculate on Won Screen Modes
+				  - W/O Aspect/Zoom Faktor
+				 */
+				 if ( sdl.opengl.glZoomFaktor_W == 0){
+					 /* Ohne Aspect Modus */
+					 glViewport( 0,0, (GLsizei)sdl.pciFSW, (GLsizei)sdl.pciFSH );
+					 
+				}else{
+					/* Mit Aspect Modus  */
+					glViewport( 0,0, (GLsizei)sdl.pciFSW, (GLsizei)sdl.pciFSH );
+				}
+				       			
+			}
+		}else{					
+			glViewport( 0, 0, (GLsizei)sdl.pciW, (GLsizei)sdl.pciH );		
+		}
+		nScreenSetup = false;
+		
+};
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+
+void voodoo_ogl_set_window(voodoo_state *v) {
 	VOGL_ClearBeginMode();
-
-	// 	matrix mode GL_PROJECTION assumed
+		
 	bool size_changed=false;
-	 if ((v->fbi.width!=sdl.pciW) || (v->fbi.height!=sdl.pciH))
+	
+	if ((v->fbi.width!=sdl.pciW) || (v->fbi.height!=sdl.pciH)){
 		 size_changed=true;
+	}
 	 
 	if (size_changed || (last_orientation != (INT32)FBZMODE_Y_ORIGIN(v->reg[fbzMode].u)))
 	
 	{
+						
+		static float zoomFactor;						
+		
+		glMatrixMode( GL_PROJECTION );	
 		glLoadIdentity( );
-	
+		
 		if (FBZMODE_Y_ORIGIN(v->reg[fbzMode].u)){
-			glOrtho( 0, v->fbi.width, 0, v->fbi.height, 0.0f, -1.0f );
+			glOrtho( sdl.opengl.glZoomFaktor_W, (GLdouble)v->fbi.width, sdl.opengl.glZoomFaktor_H, (GLdouble)v->fbi.height, (float)sdl.opengl.gl_ortho_zNear, (float)sdl.opengl.gl_ortho_zFar);
 		}		
 		else
-		{
-			// 2 Bilder
-			glOrtho( 0, v->fbi.width, v->fbi.height,0, 0.0f, -1.0f );
+		{		
+			glOrtho( sdl.opengl.glZoomFaktor_W, (GLdouble)v->fbi.width, (GLdouble)v->fbi.height,sdl.opengl.glZoomFaktor_H,(float)sdl.opengl.gl_ortho_zNear, (float)sdl.opengl.gl_ortho_zFar );
+			
 		}
 		if (last_orientation != (INT32)FBZMODE_Y_ORIGIN(v->reg[fbzMode].u))
 			last_orientation = FBZMODE_Y_ORIGIN(v->reg[fbzMode].u);
 	}
+	
 	if (size_changed) {	
-		
-		if (sdl.fullscreen){
-			if (sdl.ScrOpenGL_Flags & SDL_WINDOW_FULLSCREEN_DESKTOP){
-				SDL_DisplayMode displayMode;
-				SDL_GetDesktopDisplayMode(0, &displayMode);					
-				adjust_x = (displayMode.w - sdl.pciFSW) /2;
-				adjust_y = (displayMode.h - sdl.pciFSH) /2;			
-			}					
-			glViewport( adjust_x, adjust_y, sdl.pciFSW, sdl.pciFSH );				
-			
-		}else{			
-		
-			glViewport( 0, 0, sdl.pciW, sdl.pciH );	
-		}
-		
-		//LOG_MSG("glViewport 2 %dx%d",sdl.pciW, sdl.pciH);
-		//glClearColor (0.0, 0.0, 0.0, 1.0);	
-		if (sdl.opengl.GL_ShadeModel==0){			
-		}else if (sdl.opengl.GL_ShadeModel==1){
-			glShadeModel(GL_FLAT);		
-		}else if (sdl.opengl.GL_ShadeModel==2){			
-			glShadeModel(GL_SMOOTH);
-		}
-	}
+		voodoo_ogl_set_glViewport();		
+	}	
+	
 }
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 
-void vPCI_SDL_Free_VSurface(void)
-{
+void vPCI_SetOpenGL_Hints (void){
+				
+		if (sdl.opengl.glL_Smoth_flag) {			
+				glEnable(GL_LINE_SMOOTH);
+				glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+				LOG_MSG("[       GL_LINE_SMOOTH     : GL_NICEST     ]");	
+		}
+		
+		if (sdl.opengl.glP_Smoth_flag) {			
+				glEnable(GL_POINT_SMOOTH);
+				glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);	
+				LOG_MSG("[       GL_POINT_SMOOTH    : GL_NICEST     ]");					
+		}
+		
+		if (sdl.opengl.glG_Smoth_flag) {
+				glEnable(GL_POLYGON_SMOOTH);
+				glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);	
+				LOG_MSG("[       GL_POLYGON_SMOOTH  : GL_NICEST     ]");				
+		}
+		
+		
+		if (sdl.opengl.gl_GLFog__flag) {
+				glEnable(GL_FOG);		
+				glHint(GL_FOG_HINT, GL_NICEST);	
+				LOG_MSG("[       GL_FOG_HINT        : GL_NICEST     ]");	
+		}
+		
+		if (sdl.opengl.glPersCor_flag) {
+				glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
+				LOG_MSG("[       GL_PERSPECTIVE_COR.: GL_NICEST     ]");				
+		}
+		
+		if (sdl.opengl.glGMipMap_flag) {
+				glHint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);	
+				LOG_MSG("[       GL_GENERATE_MIPMAP : GL_FASTEST    ]");			
+		}	
+		
+		if (sdl.opengl.glBlendFc_flag) {
+				glEnable(GL_BLEND);
+				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+				LOG_MSG("[       GLBlend Function   : %d            ]");	
+				LOG_MSG("[       GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA]");			
+		}			
+		
+					
+			// glEnable(GL_TEXTURE_1D);
+			// glEnable(GL_TEXTURE_2D);
+			// glEnable(GL_TEXTURE_3D);
+			// glEnable(GL_TEXTURE_GEN_S);
+			// glEnable(GL_TEXTURE_GEN_T);
+			// glEnable(GL_TEXTURE_GEN_R);
+			// glEnable(GL_TEXTURE_GEN_Q);
+			
+			//glCheck(glEnable(GL_MULTISAMPLE_ARB));
+
+};		
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+
+void vPCI_Set2DScreen (void){
+			
+		// we're doing nothing 3d, so the Z-buffer is currently not interesting
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_STENCIL_TEST);			
+		voodoo_ogl_set_GLShadeModel();			
+		
+		voodoo_ogl_set_glViewport();
+
+		glEnable(GL_DEPTH_TEST);
+		//glDepthFunc(GL_LESS);	
+		glDepthFunc(GL_LEQUAL); 		
+
+		
+		glMatrixMode( GL_MODELVIEW );
+		glLoadIdentity();		
+		
+		voodoo_ogl_set_window(v); /////////	
+
+		glTexEnvi( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE );
+    
+		glPixelStorei( GL_PACK_ALIGNMENT, 2);
+		glPixelStorei( GL_UNPACK_ALIGNMENT, 2);		
+		
+}
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+
+void vPCI_SDL_Free_VSurface(void){
 	if (sdl.surface != NULL) {
 	#if !SDL_VERSION_ATLEAST(2, 0, 0)				
 	SDL_FreeSurface(sdl.surface);
@@ -1879,6 +2595,7 @@ void vPCI_SDL_Free_VSurface(void)
 	}
 }
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+
 void vPCI_Get_Configuration(void){
 	
 	Section_prop *section = static_cast<Section_prop *>(control->GetSection("pci"));
@@ -1893,9 +2610,13 @@ void vPCI_Get_Configuration(void){
 		
 	UseOwnWindowResolution  = sectsdl->Get_bool("VoodooUseOwnWindowRes");
 	UseOwnFullScResolution  = sectsdl->Get_bool("VoodooUseOwnFullScRes");	
-	
+	sdl.displaynumber 	    = sectsdl->Get_int("display");	
+		
 	sdl.opengl.sfiltering   =section->Get_string("Voodoo_Filter");
 	sdl.opengl.sglshademdl  =section->Get_string("Voodoo_GLShade");	
+	sdl.opengl.sgl_wrap_s   =section->Get_string("Texture_Wrap_S");		
+	sdl.opengl.sgl_wrap_t   =section->Get_string("Texture_Wrap_T");	
+	
 	sOpenGLOutput=section->Get_string("voodoo");
 
 	// Voodoo Use the same Resolution Output how Dosbox
@@ -1911,11 +2632,19 @@ void vPCI_Get_Configuration(void){
 		safe_strncpy( res,vresolution, sizeof( res ));
 		vresolution = lowcase (res);//so x and X are allowed
 		if(strcmp(vresolution,"original") == 0) {
-				sdl.pciW = 640;				
-				sdl.pciH = 480;
-		}else if (strcmp(vresolution,"desktop") == 0 || strcmp(vresolution,"0x0") == 0) { //desktop = 0x0
-				sdl.pciW = 1280;				
-				sdl.pciH = 960;		
+				sdl.pciW = (GLdouble)v->fbi.width;				
+				sdl.pciH = (GLdouble)v->fbi.height;
+		}else if (strcmp(vresolution,"desktop") == 0) { //desktop = 0x0
+				
+				SDL_DisplayMode displayMode;
+				SDL_GetDesktopDisplayMode(sdl.displaynumber, &displayMode);										
+				sdl.pciW = displayMode.w;
+				sdl.pciH = displayMode.h;				
+				
+		}else if (strcmp(vresolution,"0x0") == 0) { 
+				sdl.pciW = (GLdouble)v->fbi.width;				
+				sdl.pciH = (GLdouble)v->fbi.height;	
+		
 		}else {
 			
 			char* height = const_cast<char*>(strchr(vresolution,'x'));
@@ -1942,12 +2671,20 @@ void vPCI_Get_Configuration(void){
 		safe_strncpy( res,vresolution, sizeof( res ));
 		vresolution = lowcase (res);//so x and X are allowed
 		if (strcmp(vresolution,"original") == 0) {
-				sdl.pciFSW = 640;
-				sdl.pciFSH = 480;
-		}else if (strcmp(vresolution,"desktop") == 0 || strcmp(vresolution,"0x0") == 0) { //desktop = 0x0
+				sdl.pciFSW = (GLdouble)v->fbi.width;
+				sdl.pciFSH = (GLdouble)v->fbi.height;
+		}else if (strcmp(vresolution,"desktop") == 0) { //desktop = 0x0
 				sdl.full_fixed = true;
-				sdl.pciFSW = 1280;				
-				sdl.pciFSH = 960;	
+				
+				SDL_DisplayMode displayMode;
+				SDL_GetDesktopDisplayMode(sdl.displaynumber, &displayMode);										
+				sdl.pciFSW = displayMode.w;
+				sdl.pciFSH = displayMode.h;
+				
+		}else if (strcmp(vresolution,"0x0") == 0) { //desktop = 0x0		
+				sdl.full_fixed = true;
+				sdl.pciFSW = (GLdouble)v->fbi.width;				
+				sdl.pciFSH = (GLdouble)v->fbi.height;	
 		}else{
 				char* height = const_cast<char*>(strchr(vresolution,'x'));
 				if(height && *height) {
@@ -1958,23 +2695,36 @@ void vPCI_Get_Configuration(void){
 		}
 	}
 	
-	if (!strcasecmp(sdl.opengl.sfiltering,"default"))
+
+	
+	sdl.opengl.GL_filtering=1;
+	if (!strcasecmp(sdl.opengl.sfiltering,"none"))
 	{
 		sdl.opengl.GL_filtering=0;
 		
-	}else if (!strcasecmp(sdl.opengl.sfiltering,"gl_nearest"))
+	}else if (!strcasecmp(sdl.opengl.sfiltering,"point"))
 	{
 		sdl.opengl.GL_filtering=1;
 		
-	}else if (!strcasecmp(sdl.opengl.sfiltering,"gl_linear_1"))
+	}else if (!strcasecmp(sdl.opengl.sfiltering,"bilinear"))
 	{
 		sdl.opengl.GL_filtering=2;
 	
-	}else if (!strcasecmp(sdl.opengl.sfiltering,"gl_linear_2"))
+	}else if (!strcasecmp(sdl.opengl.sfiltering,"trilinear"))
 	{
 		sdl.opengl.GL_filtering=3;
+		
+	}else if (!strcasecmp(sdl.opengl.sfiltering,"anisotropic"))
+	{
+		sdl.opengl.GL_filtering=4;
+	
+	}else if (!strcasecmp(sdl.opengl.sfiltering,"testmode"))
+	{
+		sdl.opengl.GL_filtering=5;
 	}	
 	
+	
+	sdl.opengl.GL_ShadeModel=0;
 	if (!strcasecmp(sdl.opengl.sglshademdl,"none"))
 	{
 		sdl.opengl.GL_ShadeModel=0;
@@ -1987,21 +2737,83 @@ void vPCI_Get_Configuration(void){
 	{
 		sdl.opengl.GL_ShadeModel=2;
 	
+	}		
+
+	sdl.opengl.gl_wrap_s=10497;
+	if (!strcasecmp(sdl.opengl.sgl_wrap_s,"gl_repeat"))
+	{
+		sdl.opengl.gl_wrap_s=10497;
+		
+	}else if (!strcasecmp(sdl.opengl.sgl_wrap_s,"gl_mirrored_repeat"))
+	{
+		sdl.opengl.gl_wrap_s=33648;
+		
+	}else if (!strcasecmp(sdl.opengl.sgl_wrap_s,"gl_clamp_to_border"))
+	{
+		sdl.opengl.gl_wrap_s=33069;
+	
+	}else if (!strcasecmp(sdl.opengl.sgl_wrap_s,"gl_clamp_to_edge"))
+	{
+		sdl.opengl.gl_wrap_s=33071;
+	
 	}	
 	
+	sdl.opengl.gl_wrap_t=10497;
+	if (!strcasecmp(sdl.opengl.sgl_wrap_t,"gl_repeat"))
+	{
+		sdl.opengl.gl_wrap_t=10497;
+		
+	}else if (!strcasecmp(sdl.opengl.sgl_wrap_t,"gl_mirrored_repeat"))
+	{
+		sdl.opengl.gl_wrap_t=33648;
+		
+	}else if (!strcasecmp(sdl.opengl.sgl_wrap_t,"gl_clamp_to_border"))
+	{
+		sdl.opengl.gl_wrap_t=33069;
 	
-	sdl.opengl.TrilinearAmount	=  section->Get_int("TrilinearAmount");
-	sdl.opengl.compatibleFlag	=  section->Get_bool("compatible_flag");
+	}else if (!strcasecmp(sdl.opengl.sgl_wrap_t,"gl_clamp_to_edge"))
+	{
+		sdl.opengl.gl_wrap_t=33071;
 	
-	sdl.OpenGLDesktopFullScreen =  sectsdl->Get_bool("VoodooDesktopFullScrn");		
-	sdl.windowstaskbaradjust 	=  sectsdl->Get_int("WindowsTaskbarAdjust");	
+	}	
+	
+	sdl.opengl.gl_ortho_zNear	= 0.0f;		sdl.opengl.gl_ortho_zFar	= -1.0f;
+	sdl.opengl.glZoomFaktor_W	= 0;		sdl.opengl.glZoomFaktor_H	= 0;
+	sdl.opengl.gl_Major_Version = 2;		sdl.opengl.gl_Minor_Version = 1;
+	
+	sdl.opengl.Anisotropic_Level=  section->Get_float ("Anisotropic_Level");
+	sdl.opengl.a_ClipLowYHigh	=  section->Get_bool ("a_ClipLowYHigh");
+	sdl.opengl.n_ClipLowYHigh   =  section->Get_int  ("n_ClipLowYHigh");
+	sdl.opengl.compatibleFlag	=  section->Get_bool ("compatible_flag");
+	sdl.opengl.glScissor_flag   =  section->Get_bool ("glScissor_flag");
+	sdl.opengl.gl_PointSize_num =  section->Get_float("gl_PointSize_num");		
+	sdl.opengl.gl_PointSize_use =  section->Get_bool ("gl_PointSize_use");	
+	sdl.opengl.glP_Smoth_flag	=  section->Get_bool ("glP_Smoth_flag");
+	sdl.opengl.glL_Smoth_flag	=  section->Get_bool ("glL_Smoth_flag");
+	sdl.opengl.glBlendFc_flag	=  section->Get_bool ("glBlendFc_flag");
+	sdl.opengl.gl_GLFog__flag	=  section->Get_bool ("gl_GLFog__flag");				
+	sdl.opengl.glGMipMap_flag	=  section->Get_bool ("glGMipMap_flag");
+	sdl.opengl.glPersCor_flag	=  section->Get_bool ("glPersCor_flag");
+	sdl.opengl.glG_Smoth_flag	=  section->Get_bool ("glG_Smoth_flag");
+	sdl.opengl.voodoo_aspect    =  section->Get_bool ("voodoo_Aspect");
+	sdl.opengl.gl_Minor_Version =  section->Get_int  ("gl_Minor_Version");
+	sdl.opengl.gl_Major_Version =  section->Get_int  ("gl_Major_Version");	
+	
+	sdl.opengl.gl_ortho_zNear	=  section->Get_float("gl_ortho_zNear");	
+	sdl.opengl.gl_ortho_zFar	=  section->Get_float("gl_ortho_zFar");	
+	
+	sdl.opengl.sh_FbzcpCca_Sw2	= section->Get_bool("sh_FbzcpCca_Sw2");
+	
+	sdl.opengl.glZoomFaktor_W	=   section->Get_int("ZoomScreen_Width");
+	sdl.opengl.glZoomFaktor_H	=   section->Get_int("ZoomScreen_Height");	
+	
+	/*///////////////////// Section SDL */	
+	sdl.OpenGLDesktopFullScreen =  sectsdl->Get_bool  ("VoodooDesktopFullScrn");		
+	sdl.windowstaskbaradjust 	=  sectsdl->Get_int   ("WindowsTaskbarAdjust");	
 	sdl.dosbox.output  			=  sectsdl->Get_string("output");
-	sdl.dosbox.texture 			=  sectsdl->Get_string("texture.renderer");		
-
-
+	sdl.dosbox.texture 			=  sectsdl->Get_string("texture.renderer");	
 }
 
-	
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void vPCI_Reset_GLVideoMode(void){
 	last_clear_color=0;
@@ -2022,40 +2834,57 @@ void vPCI_Set_GL_Attributes(void){
 	has_alpha = true;
 	has_stencil = true;	
 	
-
+	SDL_GL_ResetAttributes();	
+	SDL_GL_LoadLibrary(NULL); // Default OpenGL is fine.
 	
 	if (sdl.opengl.compatibleFlag){
-		sdl.pciFSW = 640;
-		sdl.pciFSH = 480;		
-		sdl.pciW = 640;
-		sdl.pciH = 480;			
+		sdl.pciFSW = (GLdouble)v->fbi.width;
+		sdl.pciFSH = (GLdouble)v->fbi.height;		
+		sdl.pciW   = (GLdouble)v->fbi.width;
+		sdl.pciH   = (GLdouble)v->fbi.height;			
+		
 		SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
 		SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
 		SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
 		SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
 		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 		SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 2);
-		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);		
+		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);	
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,  SDL_GL_CONTEXT_PROFILE_CORE);		
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);	
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-		
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+		SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1);
 	
 	} else {
-	
-		SDL_GL_ResetAttributes();
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_RELEASE_BEHAVIOR,1);
+		int value;
+
+		SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, sdl.opengl.gl_Major_Version);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, sdl.opengl.gl_Minor_Version);
+		
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_RELEASE_BEHAVIOR, 1);		
 		SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
 		SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
 		SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
-		SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
-		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-		SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 2);
-		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	   
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_RESET_ISOLATION_FLAG);
+		SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,      8);		
+		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 32);
+		SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 2);		
+		SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE,       32);
+		SDL_GL_SetAttribute(SDL_GL_ACCUM_RED_SIZE,    8);
+		SDL_GL_SetAttribute(SDL_GL_ACCUM_GREEN_SIZE,    8);
+		SDL_GL_SetAttribute(SDL_GL_ACCUM_BLUE_SIZE,    8);
+		SDL_GL_SetAttribute(SDL_GL_ACCUM_ALPHA_SIZE,    8);
+				
+		SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS,1);
+		SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS,0);
+
+		//SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+		//SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_RESET_ISOLATION_FLAG);
+		//SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_ROBUST_ACCESS_FLAG| SDL_GL_CONTEXT_RESET_ISOLATION_FLAG);		
 		SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1);
+		
+		
 	}
 	#if !SDL_VERSION_ATLEAST(2, 0, 0)	
 		SDL_GL_SetAttribute( SDL_GL_SWAP_CONTROL, 0 );
@@ -2063,26 +2892,24 @@ void vPCI_Set_GL_Attributes(void){
 		SDL_GL_SetSwapInterval( 1 );
 	#endif	
 
-	#if defined (WIN32) && !SDL_VERSION_ATLEAST(1, 2, 10)	
+	#if defined (WIN32) && SDL_VERSION_ATLEAST(2, 0, 0)		
 		// broken on windows (longstanding SDL bug), may
 		//help other platforms to force hardware acceleration
 		SDL_GL_SetAttribute( SDL_GL_ACCELERATED_VISUAL, 1 );
 	#endif
 	
-	
-		
-	
+
 }
 
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void vPCI_SDL_SetVideoFlags(void) {
 	
 	#if !SDL_VERSION_ATLEAST(2, 0, 0)
-		sdl.sdl_WindowFlags = SDL_OPENGL;
-		sdl.sdl_FullS_Flags = SDL_OPENGL;
+		sdl.sdl_WindowFlags = SDL_OPENGL|SDL_HWSURFACE|SDL_GL_DOUBLEBUFFER;
+		sdl.sdl_FullS_Flags = SDL_OPENGL|SDL_HWSURFACE|SDL_GL_DOUBLEBUFFER;
 	#else
 		sdl.sdl_WindowFlags = SDL_WINDOW_OPENGL|SDL_WINDOW_INPUT_GRABBED|SDL_WINDOW_INPUT_FOCUS|SDL_WINDOW_MOUSE_FOCUS|SDL_WINDOW_MOUSE_CAPTURE|SDL_WINDOW_SHOWN;
-		sdl.sdl_FullS_Flags = SDL_WINDOW_OPENGL|SDL_WINDOW_INPUT_GRABBED;		
+		sdl.sdl_FullS_Flags = SDL_WINDOW_OPENGL|SDL_WINDOW_INPUT_GRABBED|SDL_GL_DOUBLEBUFFER;		
 		
 		if (!sdl.OpenGLDesktopFullScreen){
 			sdl.sdl_FullS_Flags |= SDL_WINDOW_FULLSCREEN;
@@ -2093,16 +2920,6 @@ void vPCI_SDL_SetVideoFlags(void) {
 	
 	sdl.fullscreen = GFX_IsFullscreen();
 	
-}
-
-/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-void vPCI_SDL_SetVideoMode(const char *title = "", int x = 0, int y = 0, int w = 640, int h = 480, Uint32 flags = 0) {
-	
-	#if !SDL_VERSION_ATLEAST(2, 0, 0)	
-		sdl.surface = SDL_SetVideoMode(w, h, 24, flags);
-	#else	
-		sdl.surface = SDL_CreateWindow(title, x, y, w, h, flags);	
-	#endif
 }
 
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
@@ -2118,11 +2935,137 @@ void vPCI_SDL_SetSDLContext(void){
 	#endif		
 }
 
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+void vOGL_Set_PontSize(void){
+	
+		// GLPointsize Settings, Dont use std::max in the loop, this breaks Perfoamce .. heavy
+		
+		if ( ((float)sdl.opengl.gl_PointSize_num == 0 ) && ( sdl.opengl.gl_PointSize_use == true)){
+			
+			int w = 0;
+
+			if (sdl.fullscreen){
+				w = sdl.pciFSW;					
+			} else {			
+				w = sdl.pciW;					
+			}			
+			
+			sdl.opengl.gl_PointSize_num  = std::max(1.0f, (float)(w / ((float)v->fbi.height)));
+			//LOG_MSG("VOODOO: sdl.opengl.gl_PointSize_num %f ",(float)sdl.opengl.gl_PointSize_num);
+			
+			if (sdl.opengl.gl_PointSize_use) {		
+				glPointSize( (float)sdl.opengl.gl_PointSize_num );
+			}			
+		}
+};
 
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-void vPCI_SDL_Init_OpenGLCX(void) {
+void vOGL_Set_ZoomFactor(GLdouble AspectRatio){
+	
 
-	if (GFX_LazyFullscreenRequested()) GFX_SwitchFullscreenNoReset();
+		if ( sdl.opengl.glZoomFaktor_W != 0){
+			
+			//** Adding Value to glZoomFaktor_W				
+			if (sdl.opengl.voodoo_aspect){
+				
+				if(sdl.opengl.glZoomFaktor_W >= 1){									
+					sdl.opengl.glZoomFaktor_W = (AspectRatio/6) + sdl.opengl.glZoomFaktor_W;				
+				}
+				if(sdl.opengl.glZoomFaktor_W <= 1){
+					sdl.opengl.glZoomFaktor_W = (AspectRatio/6) - sdl.opengl.glZoomFaktor_W;
+				}
+			}			
+											
+			v->fbi.width  = v->fbi.width  - sdl.opengl.glZoomFaktor_W;			 
+		
+		} else if (sdl.opengl.voodoo_aspect){
+			//* Only Aspect is true
+			sdl.opengl.glZoomFaktor_W = AspectRatio/6;
+			v->fbi.width  = v->fbi.width - sdl.opengl.glZoomFaktor_W;	
+		}
+		
+		
+		if ( sdl.opengl.glZoomFaktor_H != 0){
+			 v->fbi.height = v->fbi.height - sdl.opengl.glZoomFaktor_H;		
+		}		
+};
+
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+// static int gcd (int a, int b) {
+    // return (b == 0) ? a : gcd (b, a%b);
+// }
+void vOGL_OGL_AspectRatio(void){
+		
+		int w = 0;
+		int h = 0;
+		GLdouble aRatio = 0;
+			
+			/*////////////////////////////////////////////////////////////////////////////*/	
+			if (sdl.fullscreen){
+				w = sdl.pciFSW;	h = sdl.pciFSH;					
+			} else {			
+				w = sdl.pciW;	h = sdl.pciH;				
+			}		
+				
+			GLdouble aSpect = (GLdouble) w / h;			
+			/*////////////////////////////////////////////////////////////////////////////*/	
+			
+		LOG_MSG("VOODOO: Aspect Ratio: %f [ %d / %d ]",aSpect,w,h);							
+			/*////////////////////////////////////////////////////////////////////////////*/	
+			
+		if ( (4 * h == 3 * w) || (5 * h == 4 * w)){	
+		  sdl.opengl.voodoo_aspect = false;			  	
+		}		
+		
+		if (sdl.opengl.voodoo_aspect){		
+			// Check for The Ratio (Real Game Width)
+			if ( aSpect > 1.3 ) { 
+				
+				if( w > h ){
+
+					aRatio = w / aSpect;
+					aRatio-= 58;
+					
+					if (w == 1768){
+						aRatio -= 258;
+					}
+					if (w == 1920){
+						aRatio -= 358;
+					}	
+					if (w == 2560){
+						aRatio -= 688;
+					}					
+					if (w == 2880){
+						aRatio -= 888;
+					}
+					if (w == 3840){
+						aRatio -= 358*4;
+					}						
+					
+					/* glZoomFaktor_W Check Width vs Virtual Ingame Width */					
+					if( aRatio > v->fbi.width ){
+						
+						aRatio /= 3;					
+						aRatio = aRatio - v->fbi.width;
+						aRatio *= (v->fbi.width/v->fbi.width);
+					}else{					
+						aRatio = aRatio - v->fbi.width;
+						aRatio *=3;
+						aRatio *= (v->fbi.width/v->fbi.width);						
+					}
+				}
+			}
+		}
+		vOGL_Set_ZoomFactor(aRatio);				
+};
+
+/*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+void vPCI_SDL_Init_OpenGLCX(void){
+
+	if (GFX_LazyFullscreenRequested()){
+		//LOG_MSG("GFX_LazyFullscreenRequested");
+		//GFX_SwitchFullscreenNoReset();
+	}
 	
 
 	vPCI_SDL_SetVideoFlags();
@@ -2134,28 +3077,24 @@ void vPCI_SDL_Init_OpenGLCX(void) {
 	} else {
 		sdl.posX = SDL_WINDOWPOS_CENTERED;
 		sdl.posY = SDL_WINDOWPOS_CENTERED;
-		sdl.ScrOpenGL_Flags = sdl.sdl_WindowFlags;	
+		sdl.ScrOpenGL_Flags = sdl.sdl_WindowFlags;		
 	}
-
-	int numMonitors = SDL_GetNumVideoDisplays();
-
 
 	if (!sdl.fullscreen) {
 		sdl.surface = sdl.Dosbox_Surface;	
 					
 		SDL_GetWindowPosition(sdl.surface, &sdl.posX_Old, &sdl.posY_Old);
 		sdl.desktop.Index = SDL_GetWindowDisplayIndex(sdl.surface);						
-		//LOG_MSG("%d,%d",numMonitors,numCurrent);
+					
 
+		if (sdl.displaynumber == 0){
+			vPCI_SDL_SetWindowMode();
+			SDL_SetWindowPosition(sdl.surface,sdl.posX, sdl.posY);			
+		}
+		//SDL_SetWindowSize(sdl.surface,sdl.pciW,sdl.pciH);
 		
-		
-		vPCI_SDL_SetWindowMode();
-	
-		SDL_SetWindowPosition(sdl.surface,sdl.posX, sdl.posY);	
 		vPCI_SDL_SetSDLContext();
 		//SDL_RaiseWindow(sdl.surface);	
-
-
 		
 	}
 
@@ -2170,44 +3109,39 @@ void vPCI_SDL_Init_OpenGLCX(void) {
 				SDL_Delay(500);
 			}
 		#endif
-	}
-
-	if (sdl.fullscreen) {
 
 		sdl.surface = sdl.Dosbox_Surface; bool success = false;
 		
-			//if (!sdl.OpenGLDesktopFullScreen){
-				const int mode_count= SDL_GetNumDisplayModes( 0 );
-				for( int m= 0; m < mode_count; m++ )
-				{
-					SDL_DisplayMode mode;
-					const int result= SDL_GetDisplayMode( 0, m, &mode );
-					if( result < 0 )
-						continue;
-					if( !( SDL_BITSPERPIXEL( mode.format ) == 24 || SDL_BITSPERPIXEL( mode.format ) == 32 ) )
-						continue;
+		const int mode_count= SDL_GetNumDisplayModes( 0 );
+		for( int m= 0; m < mode_count; m++ )
+		{
+			SDL_DisplayMode mode;
+			const int result= SDL_GetDisplayMode( 0, m, &mode );
+			if( result < 0 )
+				continue;
+			
+			if( !( SDL_BITSPERPIXEL( mode.format ) == 24 || SDL_BITSPERPIXEL( mode.format ) == 32 ) )
+				continue;
 
-					if( mode.w == int(sdl.pciFSW) && mode.h == int(sdl.pciFSH) && mode.refresh_rate == int(60) )
-					{
-						const int result= SDL_SetWindowDisplayMode( sdl.surface, &mode );
-						// LOG_MSG("VOODOO: SDL_SetWindowDisplayMode %d,%d: Result = %d",mode.w,mode.h,result);
-						if( result == 0 )
-							success = true;
-							SDL_SetWindowFullscreen(sdl.surface,sdl.ScrOpenGL_Flags);
-						break;
-					}
-				}
-			//}
-			if	(!success)	{				
-				SDL_DisplayMode mode;
-				mode.w            = sdl.pciFSW;
-				mode.h            = sdl.pciFSH;
-				mode.refresh_rate = 60;
-				mode.format       = 24;
-				SDL_SetWindowDisplayMode( sdl.surface, &mode );
-				SDL_SetWindowFullscreen(sdl.surface,sdl.ScrOpenGL_Flags);
+			if( mode.w == int(sdl.pciFSW) && mode.h == int(sdl.pciFSH) && mode.refresh_rate == int(60) ){
+				const int result= SDL_SetWindowDisplayMode( sdl.surface, &mode );
+				if( result == 0 )
+					success = true;
+					SDL_SetWindowFullscreen(sdl.surface,sdl.ScrOpenGL_Flags);
+					break;
 			}
-			vPCI_SDL_SetSDLContext();				
+		}
+
+		if	(!success)	{				
+			SDL_DisplayMode mode;
+			mode.w            = sdl.pciFSW;
+			mode.h            = sdl.pciFSH;
+			mode.refresh_rate = 60;
+			mode.format       = 24;
+			SDL_SetWindowDisplayMode( sdl.surface, &mode );
+			SDL_SetWindowFullscreen(sdl.surface,sdl.ScrOpenGL_Flags);
+		}
+		vPCI_SDL_SetSDLContext();				
 	}
 	
 	const bool shouldGrab = (sdl.ScrOpenGL_Flags & SDL_WINDOW_INPUT_GRABBED);	
@@ -2219,48 +3153,63 @@ void vPCI_SDL_Init_OpenGLCX(void) {
 
 	bool few_colors = false;
 
+	LOG_MSG("VOODOO: Resolution & OpenGL Enabled Features");
+	LOG_MSG("[SDL Get OpenGL Atributtes and Hints       ]");	
+
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &value); 
+    LOG_MSG("[       MAJOR_VERSION      : %d             ]",value);
 	
-	if (SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &value) == 0) {
-		if (value < 8) few_colors = true;
-	}
-	if (SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE, &value) == 0) {
-		if (value < 8) few_colors = true;
-	}
-	if (SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE, &value) == 0) {
-		if (value < 8) few_colors = true;
-	}
-	if (few_colors) LOG_MSG("VOODOO: Graphics Mode with insufficient Color Depth");
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &value); 
+    LOG_MSG("[       MINOR_VERSION      : %d             ]",value);
+	
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_RELEASE_BEHAVIOR, &value); 
+    //LOG_MSG("[       RELEASE_BEHAVIOR   : %d             ]",value);	
+	vPCI_SetOpenGL_Hints();
+		
+    SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &value);
+    LOG_MSG("[       SDL_GL_RED_SIZE    : %d             ]",value);		
+	if (value < 8){few_colors = true;}
+	
+	SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE, &value);
+	LOG_MSG("[       SDL_GL_GREEN_SIZE  : %d             ]",value);	
+	if (value < 8){few_colors = true;}
 
-	if (SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &value) == 0) {
-		if (value < 24) LOG_MSG("VOODOO: Depth Buffer with insufficient Resolution");
-	}
+	SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE, &value);
+	LOG_MSG("[       SDL_GL_BLUE_SIZE   : %d             ]",value);	
+	if (value < 8){few_colors = true;}
+	
+	if (few_colors){LOG_MSG("[ERROR: Mode with insufficient Color Depth  ]");}
 
-	if (SDL_GL_GetAttribute(SDL_GL_STENCIL_SIZE, &value) == 0) {
-		SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);		
-		if (value < 1){
-			has_stencil = false;
-			LOG_MSG("VOODOO: GLAttribute GL_STENCIL_SIZE is 0");
-		}
-	}
-	if (SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE, &value) == 0) {
-		SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
-		if (value < 8) {
-			has_alpha = false;
-			LOG_MSG("VOODOO: GLAttribute GL_ALPHA_SIZ is 0");
-		}
-	}
+	
+	SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &value);
+	LOG_MSG("[       SDL_GL_DEPTH_SIZE  : %d            ]",value);	
+		if (value < 24) {LOG_MSG("[ERROR: Depth Buffer with insufficient Reso.]");}
 
-	if (SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER, &value) == 0) {
-		if (value < 1) {
-			LOG_MSG("VOODOO: GLAttribute DOUBLEBUFFER is 0");
-		}
-	}
+	SDL_GL_GetAttribute(SDL_GL_STENCIL_SIZE, &value);
+	LOG_MSG("[       SDL_GL_STENCIL_SIZE: %d             ]",value);	
+		
+	SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE, &value);
+	LOG_MSG("[       SDL_GL_ALPHA_SIZE  : %d             ]",value);	
+	if (value < 1) {has_alpha = false;}
 
-	if (SDL_GL_GetAttribute(SDL_GL_ACCELERATED_VISUAL, &value) == 0) {
-		if (value < 1) {
-			LOG_MSG("VOODOO: GLAttribute ACCELERATED_VISUAL is 0");
-		}
-	}
+	SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER, &value);
+	LOG_MSG("[       SDL_GL_DOUBLEBUFFER: %d             ]",value);
+
+	
+	SDL_GL_GetAttribute(SDL_GL_ACCELERATED_VISUAL, &value);
+	LOG_MSG("[       SDL_GL_ACCELERATED : %d             ]",value);	
+
+	SDL_GL_GetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, &value);
+	LOG_MSG("[       SDL_GL_FRAMEBUFFER : %d             ]",value);		
+		
+	SDL_GL_GetAttribute(SDL_GL_MULTISAMPLESAMPLES, &value);
+	LOG_MSG("[       MULTISAMPLE SAMPLES: %d             ]",value);	
+	
+	SDL_GL_GetAttribute(SDL_GL_MULTISAMPLEBUFFERS, &value);
+	LOG_MSG("[       MULTISAMPLE BUFFERS: %d             ]",value);			
+	
+	
+	
 	
 	if (has_stencil) VOGL_FlagFeature(VOGL_HAS_STENCIL_BUFFER);
 	if (has_alpha) VOGL_FlagFeature(VOGL_HAS_ALPHA_PLANE);
@@ -2271,10 +3220,10 @@ void vPCI_SDL_Init_OpenGLCX(void) {
 	} else if (depth_csize == 24) {		
 	} else if (depth_csize == 16) {
 	} else if (depth_csize < 16) {
-		LOG_MSG("VOODOO: OpenGL: invalid depth size %d",depth_csize);
 	}
-	// LOG_MSG("VOODOO: vPCI_SDL_Init_OpenGLCX Finished");		
-}
+	LOG_MSG("[       GL_DEPTH_BITS      : %dBit          ]",depth_csize);
+	LOG_MSG("[===========================================]\n\n");	
+};
 
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void voodoo_ogl_update_dimensions(void) {
@@ -2282,21 +3231,17 @@ void voodoo_ogl_update_dimensions(void) {
 	vPCI_Reset_GLVideoMode();
 	vPCI_Set_GL_Attributes();	
 	vPCI_SDL_Init_OpenGLCX();
+	vPCI_Set2DScreen();
 
-	glMatrixMode( GL_PROJECTION );
-	voodoo_ogl_set_window(v);
-
-	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
-
-	glMatrixMode( GL_MODELVIEW );
-	glLoadIdentity( );
-	glMatrixMode( GL_PROJECTION );
+	LOG_MSG("VooDoo Update Dimensions");	
 }
+
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void vPCI_get_DosboxVideo(void){
 		sdl.dosboxScreenId = GFX_GetSDLVideo();
 		sdl.Dosbox_Surface = SDL_GetWindowFromID(sdl.dosboxScreenId);
 }		
+
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void vPCI_check_OpenGLIII(void){
 	if (strcasecmp(sdl.dosbox.output,"opengl") == 0 || strcasecmp(sdl.dosbox.output,"openglnb") == 0){
@@ -2304,6 +3249,7 @@ void vPCI_check_OpenGLIII(void){
 		//	   "        Choose surface, texture or texturenb, don't use opengl or openglnb");
 	}	
 }
+
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void vPCI_force_to_OpenGL(void){
 	bool force = false;
@@ -2326,13 +3272,26 @@ void vPCI_force_to_OpenGL(void){
 		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
 	}
 }
+
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 bool voodoo_ogl_init(voodoo_state *v) {
+
+	Cache.Line.Frnt.Y = -1;
+	Cache.Line.Frnt.W = -1;
+	Cache.Line.Frnt.L = -1;
+	Cache.Line.Frnt.P = -1;
+	Cache.Line.Frnt.Buffer = NULL;
+
+	Cache.Line.Back.Y = -1;
+	Cache.Line.Back.W = -1;
+	Cache.Line.Back.L = -1;
+	Cache.Line.Back.P = -1;
+	Cache.Line.Back.Buffer = NULL;
 
 	vPCI_Get_Configuration();
 	// GET DOSBOX SCREEN
 	#if SDL_VERSION_ATLEAST(2, 0, 0)
-	
+
 		if (!sdl.OpenGLDesktopFullScreen){
 			GFX_ResetScreen();
 		}		
@@ -2363,36 +3322,48 @@ bool voodoo_ogl_init(voodoo_state *v) {
 
 	if (features == "") features = " None";
 
+			
+	vOGL_OGL_AspectRatio();
+	vOGL_Set_PontSize();
+		
 	if (!sdl.fullscreen){
 	LOG_MSG("VOODOO: Resolution & OpenGL Enabled Features\n"
 			"        Window Mode       \n"	
-			"        Width         : %d\n"
-            "        Height        : %d\n"
-			"        InGame Width  : %d\n"
-			"        InGame Height : %d\n"			
-			"        OGL filtering : %s\n"
-			"        OGL Enabled   : %s\n",sdl.pciW, sdl.pciH, v->fbi.width, v->fbi.height ,sdl.opengl.sfiltering, features.c_str());
+			"        Real Width      : %d\n"
+            "        Real Height     : %d\n"
+			"        Virt.Width      : %d\n"
+			"        Virt.Height     : %d\n"
+			"        Display         : %d\n"			
+			"        OGL Filtering   : %s\n"
+			"        OGL Point Filter: %f\n"		
+			"        OGL Zoom Width  : %d\n"
+			"        OGL Zoom Height : %d\n"			
+			"        OGL Enabled     : %s\n",sdl.pciW, sdl.pciH, v->fbi.width, v->fbi.height ,sdl.displaynumber,sdl.opengl.sfiltering, (float)sdl.opengl.gl_PointSize_num, (int)sdl.opengl.glZoomFaktor_W,(int)sdl.opengl.glZoomFaktor_H,features.c_str());
 	}else{
 	LOG_MSG("VOODOO: Resolution & OpenGL Enabled Features\n"
 			"        Fullscreen        \n"
-			"        Width         : %d\n"
-            "        Height        : %d\n"
-			"        InGame Width  : %d\n"
-			"        InGame Height : %d\n"			
-			"        OGL filtering : %s\n"
-			"        OGL Enabled   : %s\n",sdl.pciFSW, sdl.pciFSH, v->fbi.width, v->fbi.height ,sdl.opengl.sfiltering, features.c_str());		
+			"        Real Width      : %d\n"
+            "        Real Height     : %d\n"
+			"        Virt.Width      : %d\n"
+			"        Virt.Height     : %d\n"
+			"        Display         : %d\n"			
+			"        OGL Filtering   : %s\n"
+			"        OGL Point Filter: %f\n"		
+			"        OGL Zoom Width  : %d\n"
+			"        OGL Zoom Height : %d\n"			
+			"        OGL Enabled     : %s\n",sdl.pciFSW, sdl.pciFSH, v->fbi.width, v->fbi.height ,sdl.displaynumber,sdl.opengl.sfiltering, (float)sdl.opengl.gl_PointSize_num,(int)sdl.opengl.glZoomFaktor_W,(int)sdl.opengl.glZoomFaktor_H, features.c_str());		
 	}
-
-	LOG_MSG("VOODOO: Current GL_VERSION = %s\n", glGetString(GL_VERSION));
-
-	glMatrixMode( GL_PROJECTION );
-	voodoo_ogl_set_window(v);
-
-	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
-
-	glMatrixMode( GL_MODELVIEW );
-	glLoadIdentity( );
-	glMatrixMode( GL_PROJECTION );
+;	
+	/* TDOD
+	- Full/Window Switch
+	*/
+	vPCI_Set2DScreen();
+	
+	if (mouselocked){
+	    GFX_CaptureMouse_Mousecap_on();
+	}	   
+		
+	glEnd();
 	return true;
 }
 
@@ -2433,10 +3404,10 @@ void voodoo_ogl_leave(bool leavemode) {
 				info->shader_ulocations=NULL;
 
 				if (info->so_shader_program > 0) {
-					if (info->so_vertex_shader >= 0) glDetachObjectARB((GLhandleARB)info->so_shader_program, (GLhandleARB)info->so_vertex_shader);
-					if (info->so_fragment_shader >= 0) glDetachObjectARB((GLhandleARB)info->so_shader_program, (GLhandleARB)info->so_fragment_shader);
-					if (info->so_vertex_shader >= 0) glDeleteObjectARB((GLhandleARB)info->so_vertex_shader);
-					if (info->so_fragment_shader >= 0) glDeleteObjectARB((GLhandleARB)info->so_fragment_shader);
+					if (info->so_vertex_shader > 0) glDetachObjectARB((GLhandleARB)info->so_shader_program, (GLhandleARB)info->so_vertex_shader);
+					if (info->so_fragment_shader > 0) glDetachObjectARB((GLhandleARB)info->so_shader_program, (GLhandleARB)info->so_fragment_shader);
+					if (info->so_vertex_shader > 0) glDeleteObjectARB((GLhandleARB)info->so_vertex_shader);
+					if (info->so_fragment_shader > 0) glDeleteObjectARB((GLhandleARB)info->so_fragment_shader);
 					glDeleteObjectARB((GLhandleARB)info->so_shader_program);
 				}
 
@@ -2456,17 +3427,20 @@ void voodoo_ogl_leave(bool leavemode) {
 		GFX_RestoreMode();
 	}
 }
+
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 void voodoo_ogl_shutdown(voodoo_state *v) {
 	// TODO revert to previous video mode //
 	voodoo_ogl_leave(false);
 	v->active = false;
 }
+
 /*///////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 #else
 
 
 bool voodoo_ogl_init(voodoo_state *v) {
+    (void)v;
 	return false;
 }
 
@@ -2474,9 +3448,11 @@ void voodoo_ogl_leave(void) {
 }
 
 void voodoo_ogl_shutdown(voodoo_state *v) {
+    (void)v;
 }
 
 void voodoo_ogl_set_window(voodoo_state *v) {
+    (void)v;
 	E_Exit("invalid call to voodoo_ogl_set_window");
 }
 
@@ -2497,10 +3473,13 @@ void voodoo_ogl_fastfill(void) {
 }
 
 void voodoo_ogl_clip_window(voodoo_state *v) {
+    (void)v;
 	E_Exit("invalid call to voodoo_ogl_clip_window");
 }
 
 void voodoo_ogl_texture_clear(UINT32 texbase, int TMU) {
+    (void)texbase;
+    (void)TMU;
 	E_Exit("invalid call to voodoo_ogl_texture_clear");
 }
 
@@ -2509,24 +3488,44 @@ void voodoo_ogl_invalidate_paltex(void) {
 }
 
 void voodoo_ogl_draw_pixel(int x, int y, bool has_rgb, bool has_alpha, int r, int g, int b, int a) {
+    (void)has_alpha;
+    (void)has_rgb;
+    (void)x;
+    (void)y;
+    (void)r;
+    (void)g;
+    (void)b;
+    (void)a;
 	E_Exit("invalid call to voodoo_ogl_draw_pixel");
 }
 
 void voodoo_ogl_draw_z(int x, int y, int z1, int z2) {
+    (void)z1;
+    (void)z2;
+    (void)x;
+    (void)y;
 	E_Exit("invalid call to voodoo_ogl_draw_z");
 }
 
 void voodoo_ogl_draw_pixel_pipeline(int x, int y, int r, int g, int b) {
+    (void)x;
+    (void)y;
+    (void)r;
+    (void)g;
+    (void)b;	
 	E_Exit("invalid call to voodoo_ogl_draw_pixel_pipeline");
 }
 
 UINT32 voodoo_ogl_read_pixel(int x, int y) {
+    (void)x;
+    (void)y;
 	E_Exit("invalid call to voodoo_ogl_read_pixel");
 
 	return 0;
 }
 
 void voodoo_ogl_draw_triangle(poly_extra_data *extra) {
+   (void)extra;
 	E_Exit("invalid call to voodoo_ogl_draw_triangle");
 }
 

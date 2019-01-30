@@ -26,6 +26,7 @@
 #include "vga.h"
 #include "pic.h"
 #include "control.h"
+#include "..\ints\int10.h"
 
 //#undef C_DEBUG
 //#define C_DEBUG 1
@@ -33,7 +34,6 @@
 
 #define VGA_PARTS 4
 //#define VGA_DEBUG 1
-
 
 typedef Bit8u * (* VGA_Line_Handler)(Bitu vidstart, Bitu line);
 
@@ -49,6 +49,7 @@ static Bit8u * VGA_Draw_1BPP_Line(Bitu vidstart, Bitu line) {
 		*draw++=CGA_2_Table[val & 0xf];
 	}
 	return TempLine;
+	
 }
 
 static Bit8u * VGA_Draw_2BPP_Line(Bitu vidstart, Bitu line) {
@@ -844,7 +845,9 @@ static void VGA_DrawPart(Bitu lines) {
 
 void VGA_SetBlinking(Bitu enabled) {
 	Bitu b;
-	LOG(LOG_VGA,LOG_NORMAL)("Blinking %d",enabled);
+	#if defined(C_DEBUG)
+		LOG(LOG_VGA,LOG_NORMAL)("Blinking %d (File %s, Line %d)",enabled,__FILE__,__LINE__);
+	#endif
 	if (enabled) {
 		b=0;vga.draw.blinking=1; //used to -1 but blinking is unsigned
 		vga.attr.mode_control|=0x08;
@@ -983,6 +986,9 @@ static void VGA_VerticalTimer(Bitu /*val*/) {
 	case M_LIN8:
 	case M_LIN15:
 	case M_LIN16:
+	/* Custom S3 VGA ///////////////////////////////////////////////////////////////////*/
+	case M_LIN24:
+	/* Custom S3 VGA ///////////////////////////////////////////////////////////////////*/	
 	case M_LIN32:
 		vga.draw.byte_panning_shift = 4;
 		vga.draw.address += vga.draw.bytes_skip;
@@ -1074,9 +1080,12 @@ void VGA_CheckScanLength(void) {
 	case M_LIN8:
 	case M_LIN15:
 	case M_LIN16:
+	/* Custom S3 VGA ///////////////////////////////////////////////////////////////////*/
+	case M_LIN24:
+	/* Custom S3 VGA ///////////////////////////////////////////////////////////////////*/
 	case M_LIN32:
 		vga.draw.address_add=vga.config.scan_len*8;
-		break;
+        break;		
 	case M_TEXT:
 		vga.draw.address_add=vga.config.scan_len*4;
 		break;
@@ -1132,10 +1141,7 @@ void VGA_ActivateHardwareCursor(void) {
 }
 
 void VGA_SetupDrawing(Bitu /*val*/) {
-	
-	Section_prop *section = static_cast<Section_prop *>(control->GetSection("render"));	
-	bool rDebug = section->Get_bool("debug");
-	
+
 	if (vga.mode==M_ERROR) {
 		PIC_RemoveEvents(VGA_VerticalTimer);
 		PIC_RemoveEvents(VGA_PanningLatch);
@@ -1265,7 +1271,7 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		else if (IS_VGA_ARCH) vga.draw.double_scan=(vga.crtc.maximum_scan_line&0x80)>0;
 		else vga.draw.double_scan=(vtotal==262);
 	} else {
-		htotal = vga.other.htotal + 3;
+		htotal = vga.other.htotal + 3;//1
 		hdend = vga.other.hdend;
 		hbstart = hdend;
 		hbend = htotal;
@@ -1295,17 +1301,25 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 		}
 		vga.draw.delay.hdend = hdend*1000.0/clock; //in milliseconds
 	}
-#if C_DEBUG
-	LOG(LOG_VGA,LOG_NORMAL)("h total %d end %d blank (%d/%d) retrace (%d/%d)",
-		htotal, hdend, hbstart, hbend, hrstart, hrend );
-	LOG(LOG_VGA,LOG_NORMAL)("v total %d end %d blank (%d/%d) retrace (%d/%d)",
-		vtotal, vdend, vbstart, vbend, vrstart, vrend );
+#if defined(C_DEBUG)
+	LOG(LOG_VGA,LOG_NORMAL)("\n\n");
+	LOG(LOG_VGA,LOG_NORMAL)("h total %d end %d blank (%d/%d) retrace (%d/%d)",htotal, hdend, hbstart, hbend, hrstart, hrend );
+	LOG(LOG_VGA,LOG_NORMAL)("v total %d end %d blank (%d/%d) retrace (%d/%d)",vtotal, vdend, vbstart, vbend, vrstart, vrend );
+	LOG(LOG_VGA,LOG_NORMAL)("File %s --- Line %d\n\n",__FILE__,__LINE__);
 #endif
 	if (!htotal) return;
 	if (!vtotal) return;
 	
 	// The screen refresh frequency
 	fps=(double)clock/(vtotal*htotal);
+	
+    /* clip display end to stay within vtotal ("Monolith" demo part 4 320x570 mode fix) */
+    if (vdend > vtotal) {
+        
+		LOG(LOG_VGA,LOG_WARN)("VGA: Display END is GREATER than vtotal!");
+        vdend = vtotal;
+    }
+	
 	// Horizontal total (that's how long a line takes with whistles and bells)
 	vga.draw.delay.htotal = htotal*1000.0/clock; //in milliseconds
 	// Start and End of horizontal blanking
@@ -1402,9 +1416,11 @@ void VGA_SetupDrawing(Bitu /*val*/) {
 	double target_total = (machine==MCH_EGA) ? 262.0 : 449.0;
 	
 	Bitu sync = vga.misc_output >> 6;
-if (rDebug == true){	
-	LOG_MSG("Bitu sync = %d",sync);	
-}
+	
+	#if defined(C_DEBUG)
+		LOG_MSG("VGA: Sync (Vga.Misc_output >> 6) = %d --- (File %s, Line %d)",sync,__FILE__,__LINE__);	
+	#endif
+	
 	switch ( sync ) {
 	case 0:
 		// This is not defined in vga specs,
@@ -1432,12 +1448,8 @@ if (rDebug == true){
 		break;
 	}
 
-
-
 			
 	double aspect_ratio = pheight / pwidth;
-
-
 
 	vga.draw.delay.parts = vga.draw.delay.vdend/vga.draw.parts_total;
 	vga.draw.resizing=false;
@@ -1453,8 +1465,6 @@ if (rDebug == true){
 	bool doubleheight=false;
 	bool doublewidth=false;
 	
-
-
 	//Set the bpp
 	Bitu bpp;
 	switch (vga.mode) {
@@ -1464,6 +1474,11 @@ if (rDebug == true){
 	case M_LIN16:
 		bpp = 16;
 		break;
+	/* Custom S3 VGA ///////////////////////////////////////////////////////////////////*/
+	case M_LIN24:
+		bpp = 24;
+		break;
+	/* Custom S3 VGA ///////////////////////////////////////////////////////////////////*/
 	case M_LIN32:
 		bpp = 32;
 		break;
@@ -1475,22 +1490,21 @@ if (rDebug == true){
 	vga.draw.linear_mask = vga.vmemwrap - 1;
 	Bitu pix_per_char = 8;
 
-if (rDebug == true){
+if (int10.bExtraVGA_Debug){
 	LOG_MSG("=====================================================================");
-	LOG_MSG("Internal wxh = %dx%d",hdend,vdend);
-	LOG_MSG("Internal bpp = %d",bpp);	
-	LOG_MSG("Aspect Ratio = %d",aspect_ratio);
+	LOG_MSG("VGA: Mode Internal Horizontal.dend (%d) x Vertical.dend (%d)",hdend,vdend);
+	LOG_MSG("VGA: Mode Internal Bits Per Pixel = %d",bpp);	
+	LOG_MSG("VGA: Mode Current Aspect Ratio    = %d",aspect_ratio);
 	LOG_MSG("=====================================================================\n");		
 }
 	
 	switch (vga.mode) {
 case M_VGA:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_VGA ");
-		}
-		doublewidth=true;
-		width<<=2;
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_VGA   ] --- ( File %s, Line %d)",__FILE__,__LINE__);}
 		
+		doublewidth=true;		
+		width<<=2;
+	
 		// hack for tgr2 -hc high color mode demo
 		if (vga.dac.reg02==0x80) {
 			bpp=16;
@@ -1507,12 +1521,11 @@ case M_VGA:
 		} else {
 			VGA_DrawLine = VGA_Draw_Linear_Line;
 		}
+		
 		break;
 		
 	case M_LIN8:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_LIN8 ");
-		}
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_LIN8  ] --- ( File %s, Line %d)",__FILE__,__LINE__);}
 		if (vga.crtc.mode_control & 0x8)
 			width >>=1;
 		else if (svgaCard == SVGA_S3Trio && !(vga.s3.reg_3a&0x10)) {
@@ -1520,10 +1533,9 @@ case M_VGA:
 			width >>=1;
 		}
 		// fall-through
+	case M_LIN24:	
 	case M_LIN32:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_LIN32 ");
-		}	
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_LIN32 ] --- ( File %s, Line %d)",__FILE__,__LINE__);}
 		width<<=3;
 		if (vga.crtc.mode_control & 0x8)
  			doublewidth = true;
@@ -1531,13 +1543,9 @@ case M_VGA:
 		VGA_ActivateHardwareCursor();
 		break;
 	case M_LIN15:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_LIN15 ");
-		}		
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_LIN15 ] --- ( File %s, Line %d)",__FILE__,__LINE__);}																	/* <-- Custom S3 VGA */		
  	case M_LIN16:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_LIN16 ");
-		}		
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_LIN16 ] --- ( File %s, Line %d)",__FILE__,__LINE__);}		
 		// 15/16 bpp modes double the horizontal values
 		width<<=2;
 		if ((vga.crtc.mode_control & 0x8) || (svgaCard == SVGA_S3Trio && (vga.s3.pll.cmd & 0x10)))
@@ -1546,10 +1554,10 @@ case M_VGA:
 		VGA_ActivateHardwareCursor();
 		break;
 	case M_LIN4:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_LIN4 ");
-		}		
-		doublewidth=(vga.seq.clocking_mode & 0x8) > 0;
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_LIN4  ] --- ( File %s, Line %d)",__FILE__,__LINE__);}		
+		doublewidth=(vga.seq.clocking_mode & 0x8) > 0;						/* <-- Custom S3 VGA Removed*/
+		//if (vga.crtc.mode_control & 0x8)										/* <-- Custom S3 VGA */
+ 		//	doublewidth = true;													/* <-- Custom S3 VGA */
 		vga.draw.blocks = width;
 		width<<=3;
 		VGA_DrawLine=VGA_Draw_Linear_Line;
@@ -1557,9 +1565,7 @@ case M_VGA:
 		vga.draw.linear_mask = (vga.vmemwrap<<1) - 1;
 		break;
 	case M_EGA:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_EGA ");
-		}		
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_EGA   ] --- ( File %s, Line %d)",__FILE__,__LINE__);}	
 		doublewidth=(vga.seq.clocking_mode & 0x8) > 0;
 		vga.draw.blocks = width;
 		width<<=3;
@@ -1573,9 +1579,7 @@ case M_VGA:
 		vga.draw.linear_mask = (vga.vmemwrap<<1) - 1;
 		break;
 	case M_CGA16:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_CGA16 ");
-		}	
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_CGA16   ] --- ( File %s, Line %d)",__FILE__,__LINE__);}	
 		aspect_ratio=1.2;
 		doubleheight=true;
 		vga.draw.blocks=width*2;
@@ -1583,61 +1587,57 @@ case M_VGA:
 		VGA_DrawLine=VGA_Draw_CGA16_Line;
 		break;
 	case M_CGA4:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_CGA4 ");
-		}	
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_CGA4    ] --- ( File %s, Line %d)",__FILE__,__LINE__);}
 		doublewidth=true;
 		vga.draw.blocks=width*2;
 		width<<=3;
 		VGA_DrawLine=VGA_Draw_2BPP_Line;
 		break;
 	case M_CGA2:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_CGA2 ");
-		}	
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_CGA2    ] --- ( File %s, Line %d)",__FILE__,__LINE__);}	
 		doubleheight=true;
 		vga.draw.blocks=2*width;
 		width<<=3;
 		VGA_DrawLine=VGA_Draw_1BPP_Line;
 		break;
 	case M_TEXT:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_TEXT ");
-		}		
-		vga.draw.blocks=width;
+	{
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_TEXT    ] --- ( File %s, Line %d)",__FILE__,__LINE__);}	
+		
+		vga.draw.blocks = width;
 		doublewidth=(vga.seq.clocking_mode & 0x8) > 0;
+		
 		if ((IS_VGA_ARCH) && (svgaCard==SVGA_None)) {
-			// vgaonly: allow 9-pixel wide fonts
 			if (vga.seq.clocking_mode&0x01) {
 				vga.draw.char9dot = false;
-				width*=8;
+				width            *= 8;
+				
 			} else {
 				vga.draw.char9dot = true;
-				width*=9;
-				aspect_ratio*=1.125;
+				width            *= 9;							/* <-- VGA Only: 9-pixel wide fonts */
+				aspect_ratio     *= 1.125;
 			}
-			VGA_DrawLine=VGA_TEXT_Xlat16_Draw_Line;
-			bpp=16;
+			
+			VGA_DrawLine=VGA_TEXT_Xlat16_Draw_Line;							
+			bpp=16;															
+		
 		} else {
-			// not vgaonly: force 8-pixel wide fonts
-			width*=8; // 8 bit wide text font
-			vga.draw.char9dot = false;
-			VGA_DrawLine=VGA_TEXT_Draw_Line;
+			width                *= 8;							/* <-- Not VGA Only: Force 8-pixel wide fonts */
+			vga.draw.char9dot     = false;
+			VGA_DrawLine          = VGA_TEXT_Draw_Line;
 		}
+		
 		break;
+	}
 	case M_HERC_GFX:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_HERC_GFX ");
-		}		
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_HERC_GFX ] --- ( File %s, Line %d)",__FILE__,__LINE__);}		
 		vga.draw.blocks=width*2;
 		width*=16;
 		aspect_ratio=((double)width/(double)height)*(3.0/4.0);
 		VGA_DrawLine=VGA_Draw_1BPP_Line;
 		break;
 	case M_TANDY2:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_TANDY2 ");
-		}		
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_TANDY2   ] --- ( File %s, Line %d)",__FILE__,__LINE__);}
 		aspect_ratio=1.2;
 		doubleheight=true;
 		if (machine==MCH_PCJR) doublewidth=(vga.tandy.gfx_control & 0x8)==0x00;
@@ -1647,9 +1647,7 @@ case M_VGA:
 		VGA_DrawLine=VGA_Draw_1BPP_Line;
 		break;
 	case M_TANDY4:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_TANDY4 ");
-		}		
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_TANDY4   ] --- ( File %s, Line %d)",__FILE__,__LINE__);}
 		aspect_ratio=1.2;
 		doubleheight=true;
 		if (machine==MCH_TANDY) doublewidth=(vga.tandy.mode_control & 0x10)==0;
@@ -1662,9 +1660,7 @@ case M_VGA:
 		else VGA_DrawLine=VGA_Draw_2BPP_Line;
 		break;
 	case M_TANDY16:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_TANDY16 ");
-		}	
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [ M_TANDY16  ] --- ( File %s, Line %d)",__FILE__,__LINE__);}
 		aspect_ratio=1.2;
 		doubleheight=true;
 		vga.draw.blocks=width*2;
@@ -1685,9 +1681,7 @@ case M_VGA:
 		}
 		break;
 	case M_TANDY_TEXT:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_TANDY_TEXT ");
-		}	
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [M_TANDY_TEXT] --- ( File %s, Line %d)",__FILE__,__LINE__);}	
 		doublewidth=(vga.tandy.mode_control & 0x1)==0;
 		aspect_ratio=1.2;
 		doubleheight=true;
@@ -1696,19 +1690,17 @@ case M_VGA:
 		VGA_DrawLine=VGA_TEXT_Draw_Line;
 		break;
 	case M_HERC_TEXT:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> M_HERC_TEXT ");
-		}
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [M_HERC_TEXT ] --- ( File %s, Line %d)",__FILE__,__LINE__);}
 		aspect_ratio=((double)480)/((double)350);
 		vga.draw.blocks=width;
 		width<<=3;
 		VGA_DrawLine=VGA_TEXT_Herc_Draw_Line;
 		break;
 	default:
-		if (rDebug == true){
-			LOG_MSG("switch >>vga.mode===========================>>> default ");
-		}	
-		LOG(LOG_VGA,LOG_ERROR)("Unhandled VGA mode %d while checking for resolution",vga.mode);
+		if (int10.bExtraVGA_Debug){LOG_MSG("VGA: Mode Switched -> [UNK %d      ] --- ( File %s, Line %d)",__FILE__,__LINE__);}
+		#if defined(C_DEBUG)
+			LOG(LOG_VGA,LOG_ERROR)("Unhandled VGA mode %d while checking for resolution",vga.mode);
+		#endif
 		break;
 	}
 	
@@ -1760,17 +1752,18 @@ case M_VGA:
 		VGA_VerticalTimer(0);
 	}
 
-#if C_DEBUG
+#if defined(C_DEBUG)
+	LOG(LOG_VGA,LOG_NORMAL)("\n\n");
 	LOG_MSG("h total %2.5f (%3.2fkHz) blank(%02.5f/%02.5f) retrace(%02.5f/%02.5f)",	vga.draw.delay.htotal,(1.0/vga.draw.delay.htotal),vga.draw.delay.hblkstart,vga.draw.delay.hblkend,vga.draw.delay.hrstart,vga.draw.delay.hrend);
 	LOG_MSG("v total %2.5f (%3.2fHz) blank(%02.5f/%02.5f) retrace(%02.5f/%02.5f)",	vga.draw.delay.vtotal,(1000.0/vga.draw.delay.vtotal),vga.draw.delay.vblkstart,vga.draw.delay.vblkend,vga.draw.delay.vrstart,vga.draw.delay.vrend);
+	LOG(LOG_VGA,LOG_NORMAL)("File %s --- Line %d\n\n",__FILE__,__LINE__);
 #endif
 
 	if (machine == MCH_EGA || svgaCard == SVGA_None){				
-			bool bAspectRatio = section->Get_bool("aspect");
-			int  dAspectRatio = (int)round(aspect_ratio*100.0f);	
+			int  dAspectRatio  = (int)round(aspect_ratio*100.0f);	
 			
-			if ( bAspectRatio ){	
-				if (rDebug == true){			
+			if ( int10.bAspectRatio ){	
+				if (int10.bExtraVGA_Debug){			
 					LOG_MSG("\n\n\n\n\n\n\n\n\n\n");		
 					LOG_MSG("=====================================================================");
 					LOG_MSG("== Aspect Ratio is ON");
@@ -1838,7 +1831,7 @@ case M_VGA:
 					aspect_ratio =1.0;					
 					// eq Scene Demo Monolith
 				}					
-				if (rDebug == true){								
+				if (int10.bExtraVGA_Debug){								
 					switch (vga.mode) {
 						case M_VGA:  		LOG_MSG("== VGA Modus     =  M_VGA (%d)",vga.mode); 		break;							
 						case M_EGA:  		LOG_MSG("== VGA Modus     =  M_EGA (%d)",vga.mode);			break;	
@@ -1887,12 +1880,12 @@ case M_VGA:
 		vga.draw.bpp = bpp;
 		if (doubleheight) vga.draw.lines_scaled=2;
 		else vga.draw.lines_scaled=1;
-#if C_DEBUG
+#if defined(C_DEBUG)
 		LOG(LOG_VGA,LOG_NORMAL)("Width %d, Height %d, fps %f",width,height,fps);
 		LOG(LOG_VGA,LOG_NORMAL)("%s width, %s height aspect %f",doublewidth ? "double":"normal",doubleheight ? "double":"normal",aspect_ratio);
 #endif
 	
-		if (rDebug == true){
+		if (int10.bExtraVGA_Debug){
 			if (machine == MCH_EGA || svgaCard == SVGA_None){		
 				LOG_MSG("Result\n");	
 				LOG_MSG("=====================================================================");
@@ -1908,7 +1901,7 @@ case M_VGA:
 			RENDER_SetSize(width, height, bpp, (float)fps, aspect_ratio,
 			doublewidth, doubleheight);
 	}
-		if (rDebug == true){
+		if (int10.bExtraVGA_Debug){
 			LOG_MSG("\n\n\n=====================================================================");			
 			LOG_MSG("Width %d, Height %d, fps %f",width,height,fps);
 			LOG_MSG("%s width, %s height aspect %f",doublewidth ? "double":"normal",doubleheight ? "double":"normal",aspect_ratio);			

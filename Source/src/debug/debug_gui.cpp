@@ -19,12 +19,12 @@
 
 #include "dosbox.h"
 
-#if C_DEBUG
+#if defined(C_DEBUG)
 #include "control.h"
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stdio.h>
-#include <curses.h>
+#include <ncurses\curses.h>
 #include <string.h>
 
 #include "support.h"

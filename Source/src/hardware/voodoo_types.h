@@ -113,6 +113,11 @@ typedef UINT32 rgb_t;
 /* an rgb15_t is a single combined 15-bit R,G,B value */
 typedef UINT16 rgb15_t;
 
+/* an rgb_t is a single combined R,G,B (and optionally alpha) value */
+typedef UINT32 rgb16_t;
+typedef uint32_t rgb24_t;
+typedef uint16_t rgb565_t;
+
 /* macros to assemble rgb_t values */
 #define MAKE_ARGB(a,r,g,b)	((((rgb_t)(a) & 0xff) << 24) | (((rgb_t)(r) & 0xff) << 16) | (((rgb_t)(g) & 0xff) << 8) | ((rgb_t)(b) & 0xff))
 #define MAKE_RGB(r,g,b)		(MAKE_ARGB(255,r,g,b))
@@ -130,6 +135,61 @@ typedef UINT16 rgb15_t;
 /***************************************************************************
     INLINE FUNCTIONS
 ***************************************************************************/
+
+/*-------------------------------------------------
+    rgb_to_rgb15 - convert an RGB triplet to
+    a 15-bit OSD-specified RGB value
+-------------------------------------------------*/
+
+INLINE rgb565_t cnv24_to_565(rgb24_t rgb){
+    rgb565_t out;
+
+	 out   = (rgb & 0x00000000);
+	 out  |= (rgb << 19) & 0x001f;
+	 out  |= (rgb << 5) & 0x07E0;
+	 out  |= (rgb >> 8) & 0xF800;
+	 
+	 // out   = (rgb >> 24) & 0xffff;
+	 // out  |= (rgb >> 16) & 0xf800;
+	 // out  |= (rgb >> 5) & 0x07e0;
+	 // out  |= (rgb >> 3) & 0x001f;
+    // /* Red shift from 24 to 16, masking but 5 MSBs */
+    // out  = (rgb >> 19) & 0xf800;//out  = (rgb >> 19) & 0xf800;
+
+    // /* Green shift from 16 to 11, masking 6 MSBs */
+    // out |= (rgb >> 8) & 0x07e0;//out |= (rgb >> 16) & 0x07e0;
+
+    // /* Blue shift from 8 to 5, masking 5 MSBs */
+    // out |= (rgb >> 3) & 0x001f;//out |= (rgb >> 14) & 0x001f;
+
+    return out;
+} 
+
+INLINE rgb16_t rgb8_to_rgb16(rgb_t rgb)
+{
+	
+	return rgb = ((RGB_RED  (rgb) & 0b11111111) << 0) |
+             	 ((RGB_GREEN(rgb) & 0b11111111) << 0) |
+				 ((RGB_BLUE (rgb) & 0b00000000) << 0) |
+				 ((RGB_ALPHA(rgb) & 0b11111111) << 0); 
+    // changed order of variable names
+    // unsigned char b = (((rgb)&0x001F) << 3);
+    // unsigned char g = (((rgb)&0x07E0) >> 3); // Fixed: shift >> 5 and << 2
+    // unsigned char r = (((rgb)&0xF800) >> 8); // shift >> 11 and << 3
+    // return rgb( r, g, b, 255 );
+	
+	//return ((RGB_RED(rgb) >> 5) * 32) | (RGB_GREEN(rgb & 28 >> 2) *32 ) | (RGB_BLUE(rgb & 3 )* 64);
+	//return (RGB_RED(rgb *8)/256) | (RGB_GREEN(rgb * 8) /256 ) | (RGB_BLUE(rgb * 3 ) / 256);	
+	
+	// return (INT16)((RGB_RED(rgb)   << 8) & 0xf800)|
+	              // ((RGB_GREEN(rgb) << 2) & 0x03e0)|
+				  // ((RGB_BLUE(rgb)  >> 3) & 0x001f);	
+				  
+	//return (INT32)((RGB_RED(rgb))|(RGB_GREEN(rgb) << 8)|(RGB_BLUE(rgb)<<16)|(0xFF000000));	
+
+//return (INT32)((RGB_RED(rgb)>>4)|(RGB_GREEN(rgb)&0xF0)|((RGB_BLUE(rgb)&0xF0)<<4)|((RGB_ALPHA(rgb)&0xF0)<<8));
+	
+}
 
 /*-------------------------------------------------
     rgb_to_rgb15 - convert an RGB triplet to

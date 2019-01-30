@@ -965,7 +965,7 @@ static Bit8u * gen_create_branch(BranchTypes type) {
 }
 
 static void gen_fill_branch(Bit8u * data,Bit8u * from=cache.pos) {
-#if C_DEBUG
+#if defined(C_DEBUG)
 	Bits len=from-data;
 	if (len<0) len=-len;
 	if (len>126) LOG_MSG("Big jump %d",len);

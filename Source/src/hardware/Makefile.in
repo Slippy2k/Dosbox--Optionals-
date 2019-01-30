@@ -122,7 +122,7 @@ am_libhardware_a_OBJECTS = adlib.$(OBJEXT) dma.$(OBJEXT) \
 	ipx.$(OBJEXT) ipxserver.$(OBJEXT) dbopl.$(OBJEXT) \
 	nukedopl.$(OBJEXT) innova.$(OBJEXT) voodoo.$(OBJEXT) \
 	voodoo_interface.$(OBJEXT) voodoo_emu.$(OBJEXT) \
-	voodoo_opengl.$(OBJEXT) voodoo_vogl.$(OBJEXT)
+	voodoo_vogl.$(OBJEXT) voodoo_opengl.$(OBJEXT)
 libhardware_a_OBJECTS = $(am_libhardware_a_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -332,7 +332,7 @@ top_srcdir = @top_srcdir@
 AM_CPPFLAGS = -I$(top_srcdir)/include
 SUBDIRS = serialport mame reSID
 EXTRA_DIST = opl.cpp opl.h adlib.h dbopl.h pci_devices.h nukedopl.h voodoo_types.h voodoo_def.h voodoo_data.h \
-             voodoo_interface.h voodoo_emu.h voodoo_opengl.h voodoo_vogl.h
+             voodoo_interface.h voodoo_emu.h voodoo_vogl.h voodoo_opengl.h
 
 noinst_LIBRARIES = libhardware.a
 libhardware_a_SOURCES = adlib.cpp dma.cpp gameblaster.cpp hardware.cpp iohandler.cpp joystick.cpp keyboard.cpp \
@@ -340,7 +340,7 @@ libhardware_a_SOURCES = adlib.cpp dma.cpp gameblaster.cpp hardware.cpp iohandler
 			vga.cpp vga_attr.cpp vga_crtc.cpp vga_dac.cpp vga_draw.cpp vga_gfx.cpp vga_other.cpp \
 			vga_memory.cpp vga_misc.cpp vga_seq.cpp vga_xga.cpp vga_s3.cpp vga_tseng.cpp vga_paradise.cpp \
 			cmos.cpp disney.cpp gus.cpp mpu401.cpp ipx.cpp ipxserver.cpp dbopl.cpp nukedopl.cpp innova.cpp \
-			voodoo.cpp voodoo_interface.cpp voodoo_emu.cpp voodoo_opengl.cpp voodoo_vogl.cpp
+			voodoo.cpp voodoo_interface.cpp voodoo_emu.cpp voodoo_vogl.cpp voodoo_opengl.cpp
 
 all: all-recursive
 

@@ -65,7 +65,7 @@ void DOS_InfoBlock::SetLocation(Bit16u segment) {
 	sSave(sDIB,protFCBs,(Bit16u)0);
 	sSave(sDIB,specialCodeSeg,(Bit16u)0);
 	sSave(sDIB,joindedDrives,(Bit8u)0);
-	sSave(sDIB,lastdrive,(Bit8u)0x01);//increase this if you add drives to cds-chain
+	sSave(sDIB,lastdrive,(Bit8u)0x11);//increase this if you add drives to cds-chain
 
 	sSave(sDIB,diskInfoBuffer,RealMake(segment,offsetof(sDIB,diskBufferHeadPt)));
 	sSave(sDIB,setverPtr,(Bit32u)0);

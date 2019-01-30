@@ -55,7 +55,7 @@
 #endif
 #endif
 
-#if C_DEBUG
+#if defined(C_DEBUG)
 Bitu DEBUG_EnableDebugger(void);
 #endif
 
@@ -640,7 +640,7 @@ public:
 					i++;
 					if(cmd->FindCommand(i+1, temp_line)) {
 						drive=toupper(temp_line[0]);
-						if ((drive != 'A') && (drive != 'C') && (drive != 'D')) {
+						if ((drive != 'A') && (drive != 'C') && (drive != 'D') && (drive != 'E')) {
 							printError();
 							return;
 						}
@@ -2434,7 +2434,7 @@ void DOS_SetupPrograms(void) {
 		"The syntax of this command is:\n\n"
 		"\033[34;1mBOOT [diskimg1.img diskimg2.img] [-l driveletter]\033[0m\n"
 		);
-	MSG_Add("PROGRAM_BOOT_UNABLE","Unable to boot off of drive %c");
+	MSG_Add("PROGRAM_BOOT_UNABLE","Unable to boot off of drive %c\n");
 	MSG_Add("PROGRAM_BOOT_IMAGE_OPEN","Opening image file: %s\n");
 	MSG_Add("PROGRAM_BOOT_IMAGE_NOT_OPEN","Cannot open %s");
 	MSG_Add("PROGRAM_BOOT_BOOT","Booting from drive %c...\n");

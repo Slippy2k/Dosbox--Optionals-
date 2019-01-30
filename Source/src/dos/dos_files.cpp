@@ -39,8 +39,10 @@
 #define FCB_ERR_EOF     3
 #define FCB_ERR_WRITE   1
 
-
-DOS_File * Files[DOS_FILES];
+/******************************************** #278 "FILES= adjustable by Kippesoep" patch*/
+Bitu DOS_FILES = 127;
+DOS_File ** Files;
+/******************************************** #278 "FILES= adjustable by Kippesoep" patch*/
 DOS_Drive * Drives[DOS_DRIVES];
 
 Bit8u DOS_GetDefaultDrive(void) {
@@ -1324,6 +1326,9 @@ bool DOS_GetFileDate(Bit16u entry, Bit16u* otime, Bit16u* odate) {
 
 void DOS_SetupFiles (void) {
 	/* Setup the File Handles */
+	/******************************************** #278 "FILES= adjustable by Kippesoep" patch*/
+	Files = new DOS_File * [DOS_FILES];
+	/******************************************** #278 "FILES= adjustable by Kippesoep" patch*/
 	Bit32u i;
 	for (i=0;i<DOS_FILES;i++) {
 		Files[i]=0;

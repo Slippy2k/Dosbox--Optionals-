@@ -49,6 +49,8 @@
 #include "programs.h"
 #include "midi.h"
 
+extern void GFX_SetTitle(Bit32s cycles ,Bits frameskip,bool paused);
+
 #define MIXER_SSIZE 4
 
 //#define MIXER_SHIFT 14
@@ -64,6 +66,10 @@
 #define TICK_NEXT ( 1 << TICK_SHIFT)
 #define TICK_MASK (TICK_NEXT -1)
 
+Bit32s MixerVolDownUpKeysL = 0;
+Bit32s MixerVolDownUpKeysR = 0;
+Bit32s MixerVolMuteSaveL   = 0;
+Bit32s MixerVolMuteSaveR   = 0;
 
 static INLINE Bit16s MIXER_CLIP(Bits SAMP) {
 	if (SAMP < MAX_AUDIO) {
@@ -88,6 +94,8 @@ static struct {
 	Bit32u blocksize;
 } mixer;
 
+
+	
 Bit8u MixTemp[MIXER_BUFSIZE];
 
 MixerChannel * MIXER_AddChannel(MIXER_Handler handler,Bitu freq,const char * name) {
@@ -130,6 +138,11 @@ void MIXER_DelChannel(MixerChannel* delchan) {
 void MixerChannel::UpdateVolume(void) {
 	volmul[0]=(Bits)((1 << MIXER_VOLSHIFT)*scale*volmain[0]*mixer.mastervol[0]);
 	volmul[1]=(Bits)((1 << MIXER_VOLSHIFT)*scale*volmain[1]*mixer.mastervol[1]);
+	MixerVolDownUpKeysL = mixer.mastervol[0]*100;
+	MixerVolDownUpKeysR = mixer.mastervol[1]*100;	
+	//LOG_MSG("SND: Volume Mixer: %2d:%2d",MixerVolDownUpKeysL,MixerVolDownUpKeysR);	
+	// Zeige Lautstärke im Fenster	
+	GFX_SetTitle(-1,-1,false);	
 }
 
 void MixerChannel::SetVolume(float _left,float _right) {
@@ -675,11 +688,15 @@ static void MIXER_UpdateVol(float delta) {
 }
  
 static void MIXER_VolDown(bool pressed) {
-	MIXER_UpdateVol(-0.05f);
+	MIXER_UpdateVol(-0.01f);
 }
 
 static void MIXER_VolUp(bool pressed) {
-	MIXER_UpdateVol(+0.05f);
+	MIXER_UpdateVol(+0.01f);
+}
+
+static void MIXER_VolMute(bool pressed) {
+	/* Todo Volume Mute */
 }
 
 
@@ -700,7 +717,13 @@ void MIXER_Init(Section* sec) {
 	memset(mixer.work,0,sizeof(mixer.work));
 	mixer.mastervol[0]=1.0f;
 	mixer.mastervol[1]=1.0f;
-
+	
+	// Zeige Lautstärke im Fenster	
+	MixerVolDownUpKeysL = mixer.mastervol[0]*100;
+	MixerVolDownUpKeysR = mixer.mastervol[1]*100;
+	MixerVolMuteSaveL   = MixerVolDownUpKeysL;
+	MixerVolMuteSaveR   = MixerVolDownUpKeysR;
+	
 	/* Start the Mixer using SDL Sound at 22 khz */
 	SDL_AudioSpec spec;
 	SDL_AudioSpec obtained;
@@ -736,7 +759,16 @@ void MIXER_Init(Section* sec) {
 	mixer.min_needed=(mixer.freq*mixer.min_needed)/1000;
 	mixer.max_needed=mixer.blocksize * 2 + 2*mixer.min_needed;
 	mixer.needed=mixer.min_needed+1;
-	MAPPER_AddHandler(MIXER_VolDown,MK_f9,MMOD2,"volumedown","Vol Down");
-	MAPPER_AddHandler(MIXER_VolUp,MK_f10,MMOD2,"volumeup","Vol Up");	
+	
+	if ( (section->Get_bool("UseMediaKeys") == false ) ){
+		MAPPER_AddHandler(MIXER_VolDown,MK_f9,MMOD2,"volumedown","Vol Down");
+		MAPPER_AddHandler(MIXER_VolUp,MK_f10,MMOD2,"volumeup","Vol Up");	
+	}else{
+		/* Volume Media Keys */
+		MAPPER_AddHandler(MIXER_VolDown,MK_ACVD,0,"volumedown","Vol Down");
+		MAPPER_AddHandler(MIXER_VolUp,MK_ACVU,0,"volumeup","Vol Up");
+		MAPPER_AddHandler(MIXER_VolMute,MK_ACVM,0,"volumemute","Vol Mute");	
+	}	
+	
 	PROGRAMS_MakeFile("MIXER.COM",MIXER_ProgramStart);
 }

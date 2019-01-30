@@ -922,7 +922,7 @@ conftest.c:56:1: warning: function declaration isn't a prototype [-Wstrict-proto
 conftest.c:65:1: warning: function declaration isn't a prototype [-Wstrict-prototypes]
  main ()
  ^~~~
-D:\System_Development\Msys32Bit_Dosbox\tmp\ccu2nXyT.o: In function `main':
+D:\System_Development\Msys32Bit_Dosbox\tmp\cccIQhml.o: In function `main':
 D:\System_Development\Msys32Bit_Dosbox\src\dosbox\src\libs\decoders\internal\opus/conftest.c:67: undefined reference to `__malloc_hook'
 collect2.exe: error: ld returned 1 exit status
 configure:14813: $? = 1

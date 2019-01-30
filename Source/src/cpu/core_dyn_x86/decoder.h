@@ -2697,7 +2697,7 @@ illegalopcode:
 	gen_return(BR_Opcode);
 	dyn_closeblock();
 	goto finish_block;
-#if (C_DEBUG)
+#if defined(C_DEBUG)
 	dyn_set_eip_last();
 	dyn_reduce_cycles();
 	dyn_save_critical_regs();

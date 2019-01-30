@@ -245,7 +245,9 @@ static void DSP_SetSpeaker(bool how) {
 }
 
 static INLINE void SB_RaiseIRQ(SB_IRQS type) {
-	LOG(LOG_SB,LOG_NORMAL)("Raising IRQ");
+	#if defined(C_DEBUG)
+		//LOG(LOG_SB,LOG_NORMAL)("Raising IRQ");
+	#endif
 	switch (type) {
 	case SB_IRQ_8:
 		if (sb.irq.pending_8bit) {
@@ -661,7 +663,7 @@ static void DSP_DoDMATransfer(DMA_MODES mode,Bitu freq,bool autoinit, bool stere
 		return;
 	}
 
-#if (C_DEBUG)
+#if defined(C_DEBUG)
 	LOG(LOG_SB, LOG_NORMAL)("DMA Transfer:%s %s %s freq %d rate %d size %d",
 		type,
 		stereo ? "Stereo" : "Mono",
@@ -751,7 +753,7 @@ static void DSP_FinishReset(Bitu /*val*/) {
 }
 
 static void DSP_Reset(void) {
-	LOG(LOG_SB,LOG_ERROR)("DSP:Reset");
+	//LOG(LOG_SB,LOG_ERROR)("DSP:Reset");
 	PIC_DeActivateIRQ(sb.hw.irq);
 
 	DSP_ChangeMode(MODE_NONE);
@@ -1355,9 +1357,10 @@ static void CTMIXER_Write(Bit8u val) {
 	default:
 
 		if(	((sb.type == SBT_PRO1 || sb.type == SBT_PRO2) && sb.mixer.index==0x0c) || /* Input control on SBPro */
-			 (sb.type == SBT_16 && sb.mixer.index >= 0x3b && sb.mixer.index <= 0x47)) /* New SB16 registers */
+			 //(sb.type == SBT_16 && sb.mixer.index >= 0x3b && sb.mixer.index <= 0x47)) /* New SB16 registers */
+			 (sb.type == SBT_16 && sb.mixer.index >= 0x3b && sb.mixer.index <= 0x83)) /* New SB16 registers */			 
 			sb.mixer.unhandled[sb.mixer.index] = val;
-		LOG(LOG_SB,LOG_WARN)("MIXER:Write %X to unhandled index %X",val,sb.mixer.index);
+		//LOG(LOG_SB,LOG_WARN)("MIXER:Write %X to unhandled index %X",val,sb.mixer.index);
 	}
 }
 
@@ -1458,11 +1461,12 @@ static Bit8u CTMIXER_Read(void) {
 				((sb.type == SBT_16) ? 0x20 : 0);
 	default:
 		if (	((sb.type == SBT_PRO1 || sb.type == SBT_PRO2) && sb.mixer.index==0x0c) || /* Input control on SBPro */
-			(sb.type == SBT_16 && sb.mixer.index >= 0x3b && sb.mixer.index <= 0x47)) /* New SB16 registers */
+			//(sb.type == SBT_16 && sb.mixer.index >= 0x3b && sb.mixer.index <= 0x47)) /* New SB16 registers */
+			(sb.type == SBT_16 && sb.mixer.index >= 0x3b && sb.mixer.index <= 0x83)) /* New SB16 registers */
 			ret = sb.mixer.unhandled[sb.mixer.index];
 		else
 			ret=0xa;
-		LOG(LOG_SB,LOG_WARN)("MIXER:Read from unhandled index %X",sb.mixer.index);
+		//LOG(LOG_SB,LOG_WARN)("MIXER:Read from unhandled index %X",sb.mixer.index);
 	}
 	return ret;
 }

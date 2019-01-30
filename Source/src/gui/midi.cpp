@@ -121,7 +121,8 @@ void MIDI_RawOutByte(Bit8u data) {
 			midi.sysex.buf[midi.sysex.used++] = 0xf7;
 
 			if ((midi.sysex.start) && (midi.sysex.used >= 4) && (midi.sysex.used <= 9) && (midi.sysex.buf[1] == 0x41) && (midi.sysex.buf[3] == 0x16)) {
-				LOG(LOG_ALL,LOG_ERROR)("MIDI:Skipping invalid MT-32 SysEx midi message (too short to contain a checksum)");
+				LOG(LOG_ALL,LOG_ERROR)("MID: Skipping invalid MT-32 SysEx Midi Message\n"
+				                            "(too short to contain a checksum)");
 			} else {
 //				LOG(LOG_ALL,LOG_NORMAL)("Play sysex; address:%02X %02X %02X, length:%4d, delay:%3d", midi.sysex.buf[5], midi.sysex.buf[6], midi.sysex.buf[7], midi.sysex.used, midi.sysex.delay);
 				midi.handler->PlaySysex(midi.sysex.buf, midi.sysex.used);
@@ -137,7 +138,7 @@ void MIDI_RawOutByte(Bit8u data) {
 				}
 			}
 
-			LOG(LOG_ALL,LOG_NORMAL)("Sysex message size %d", static_cast<int>(midi.sysex.used));
+			LOG(LOG_ALL,LOG_NORMAL)("MID: Sysex Message Size %d", static_cast<int>(midi.sysex.used));
 			if (CaptureState & CAPTURE_MIDI) {
 				CAPTURE_AddMidi( true, midi.sysex.used-1, &midi.sysex.buf[1]);
 			}
@@ -194,12 +195,12 @@ public:
 		while (handler) {
 			if (!strcasecmp(dev,handler->GetName())) {
 				if (!handler->Open(conf)) {
-					LOG_MSG("MIDI: Can't open device:%s with config:%s.",dev,conf);
+					LOG_MSG("\nMIDI: Can't Open Device: %s With Config: %s.\n",dev,conf);
 					goto getdefault;
 				}
 				midi.handler=handler;
 				midi.available=true;
-				LOG_MSG("MIDI: Opened device:%s",handler->GetName());
+				LOG_MSG("MIDI: Opened Device: %s\n",handler->GetName());
 				return;
 			}
 			handler=handler->next;
@@ -211,7 +212,7 @@ getdefault:
 			if (handler->Open(conf)) {
 				midi.available=true;
 				midi.handler=handler;
-				LOG_MSG("MIDI: Opened device:%s",handler->GetName());
+				LOG_MSG("MIDI: Opened Device: %s\n",handler->GetName());
 				return;
 			}
 			handler=handler->next;

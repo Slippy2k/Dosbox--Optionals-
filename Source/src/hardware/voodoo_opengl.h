@@ -33,6 +33,17 @@
 #include "voodoo_vogl.h"
 #include "voodoo_types.h"
 
+void _check_gl_error(const char *file, int line);
+ 
+///
+/// Usage
+/// [... some opengl calls]
+/// glCheckError();
+///
+#define check_gl_error() _check_gl_error(__FILE__,__LINE__)
+
+void glCheckError(const GLchar* file, GLuint line, const GLchar* expression);
+#define glCheck(expr) do { expr; glCheckError(__FILE__, __LINE__, #expr); } while (false)
 
 /* texture data */
 struct ogl_texture_data {
@@ -89,5 +100,45 @@ void voodoo_ogl_draw_pixel_pipeline(int x, int y, int r, int g, int b);
 UINT32 voodoo_ogl_read_pixel(int x, int y);
 
 void voodoo_ogl_draw_triangle(poly_extra_data *extra);
+
+using namespace std;
+class OpenGLReadWriteSpeed
+{
+public:
+    // OpenGLReadWriteSpeed(const GLdouble maximumSamplePeriod = 0.5);
+   // ~OpenGLReadWriteSpeed();
+
+       typedef struct
+    {
+        GLenum format;
+        GLenum type;
+        string name;
+    } modeType;
+
+   const static modeType  _modes[11];
+};
+
+const OpenGLReadWriteSpeed::modeType _modes[11] =
+{
+       { GL_DEPTH_COMPONENT,  GL_INT,            "GLint    Depth"   },
+       { GL_DEPTH_COMPONENT,  GL_UNSIGNED_INT,   "GLuint   Depth"   },
+       { GL_DEPTH_COMPONENT,  GL_SHORT,          "GLshort  Depth"   },
+       { GL_DEPTH_COMPONENT,  GL_UNSIGNED_SHORT, "GLushort Depth"   },
+       { GL_DEPTH_COMPONENT,  GL_FLOAT,          "GLfloat  Depth"   },
+       { GL_STENCIL_INDEX,    GL_BYTE,           "GLbyte   Stencil" },
+       { GL_STENCIL_INDEX,    GL_UNSIGNED_BYTE,  "GLubyte  Stencil" },
+       { GL_RGBA,             GL_BYTE,           "GLbyte   RGBA"    },
+       { GL_RGBA,             GL_UNSIGNED_BYTE,  "GLubyte  RGBA"    },
+       { GL_BGRA,             GL_BYTE,           "GLbyte   BGRA"    },
+       { GL_BGRA,             GL_UNSIGNED_BYTE,  "GLubyte  BGRA"    }
+};
+
+
+    //const GLdouble  _maximumSamplePeriod;
+
+    //const static GltString _banner;
+    //const static GLdouble  _mill;
+
+
 
 #endif

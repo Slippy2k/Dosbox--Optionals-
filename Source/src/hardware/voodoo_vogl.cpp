@@ -55,8 +55,10 @@ PFNGLGETOBJECTPARAMETERIVARBPROC glGetObjectParameterivARB = NULL;
 PFNGLGETINFOLOGARBPROC glGetInfoLogARB = NULL;
 PFNGLBLENDFUNCSEPARATEEXTPROC glBlendFuncSeparateEXT = NULL;
 PFNGLGENERATEMIPMAPEXTPROC glGenerateMipmapEXT = NULL;
+PFNGLGENERATEMIPMAPPROC glGenerateMipmap = NULL;
 PFNGLGETATTRIBLOCATIONARBPROC glGetAttribLocationARB = NULL;
 PFNGLVERTEXATTRIB1FARBPROC glVertexAttrib1fARB = NULL;
+PFNGLPOINTPARAMETERFVPROC glPointParameterfv = NULL;
 
 
 static Bit32s opengl_version = -1;
@@ -117,7 +119,7 @@ void VOGL_InitVersion(void) {
 	const GLubyte* gl_verstr_ub = glGetString(GL_VERSION);
 	strncpy(gl_verstr, (const char*)gl_verstr_ub, 16);
 	
-	LOG_MSG("VOODOO: Opengl = GL Version: %s",glGetString(GL_VERSION));
+	LOG_MSG("VOODOO: GL Version: %s",glGetString(GL_VERSION));
 	
 	gl_verstr[15] = 0;
 	char* gl_ver_minor = strchr(gl_verstr, '.');
@@ -162,7 +164,7 @@ void VOGL_InitVersion_Fake(void) {
 	
 	if (glVersion_ub)
 	{ 
-		LOG_MSG("VOODOO: Opengl = GL Version: %s",glGetString(GL_VERSION));	
+		LOG_MSG("VOODOO: GL Version: %s (Fake)",glGetString(GL_VERSION));	
 		strncpy(glVersion, glVersion_ub,  16);
 	}
 	else
@@ -170,7 +172,7 @@ void VOGL_InitVersion_Fake(void) {
 		// Fake a GL Version
 		const char glVersion_st[16] = {"2.0.0 Voodoo PC"};	 		
 		strncpy(glVersion, (const char*)glVersion_st, 16);
-		LOG_MSG("VOODOO: Opengl = GL Version: %s",glVersion);		
+		LOG_MSG("VOODOO: GL Version: %s (Fake)",glVersion);		
 	}
 	
 	glVersion[16] = '\0';
@@ -185,7 +187,7 @@ void VOGL_InitVersion_Fake(void) {
 		major = 1;
 		major = 1;		
 	}
-	LOG_MSG("VOODOO: Opengl = GL Version: %s",glGetString(GL_VERSION));		
+	LOG_MSG("VOODOO: GL Version: %s (Fake)",glGetString(GL_VERSION));		
 		
 	int ogl_ver = 100;
 	if (major > 0) {
@@ -265,6 +267,12 @@ bool VOGL_Initialize(void) {
 		LOG_MSG("opengl: glGenerateMipmapEXT extension not supported");
 		return false;
 	}
+	
+	glGenerateMipmap = (PFNGLGENERATEMIPMAPPROC)((void*)SDL_GL_GetProcAddress("glGenerateMipmap"));
+	if (!glGenerateMipmap) {
+		LOG_MSG("opengl: glGenerateMipmap extension not supported");
+		return false;
+	}	
 		
 	//if (VOGL_CheckFeature(VOGL_ATLEAST_V20)) {
 		const char* extensions = (const char*)glGetString(GL_EXTENSIONS);
@@ -329,13 +337,17 @@ bool VOGL_Initialize(void) {
 				glVertexAttrib1fARB = (PFNGLVERTEXATTRIB1FARBPROC)SDL_GL_GetProcAddress("glVertexAttrib1fARB");
 				if (!glVertexAttrib1fARB) LOG_MSG("opengl: glVertexAttrib1fARB extension not supported");
 
+				glPointParameterfv = (PFNGLPOINTPARAMETERFVPROC)SDL_GL_GetProcAddress("glPointParameterfv");
+				if (!glPointParameterfv) LOG_MSG("opengl: glPointParameterfv extension not supported");
+						
+				
 				if (glShaderSourceARB && glCompileShaderARB && glCreateProgramObjectARB &&
 					glAttachObjectARB && glLinkProgramARB && glUseProgramObjectARB &&
 					glUniform1iARB && glUniform1fARB && glUniform2fARB && glUniform3fARB &&
 					glUniform4fARB && glGetUniformLocationARB && glDetachObjectARB &&
 					glDeleteObjectARB && glGetObjectParameterivARB && glGetInfoLogARB) {
 						VOGL_FlagFeature(VOGL_HAS_SHADERS);
-//						LOG_MSG("opengl: shader functionality enabled");
+						LOG_MSG("VOODOO: Shader Functionality Enabled");
 				} else {
 					VOGL_ClearShaderFunctions();
 				}
@@ -343,7 +355,7 @@ bool VOGL_Initialize(void) {
 		//}
 	}
 
-	LOG_MSG("opengl: I am able to use OpenGL to emulate Voodoo graphics");
+	//LOG_MSG("opengl: I am able to use OpenGL to emulate Voodoo graphics");
 	return true;
 }
 
@@ -516,8 +528,17 @@ void VOGL_SetReadMode(bool front_read) {
 	VOGL_ClearBeginMode();
 
 	if (read_from_front_buffer!=front_read) {
-		if (front_read) glReadBuffer(GL_FRONT);
-		else glReadBuffer(GL_BACK);
+		
+		if (front_read){
+			glReadBuffer(GL_FRONT);
+			// glReadBuffer(GL_LEFT);
+			// glReadBuffer(GL_FRONT_RIGHT);
+			// glReadBuffer(GL_RIGHT);
+		}
+		else
+		{
+			glReadBuffer(GL_BACK);
+		}
 		read_from_front_buffer=front_read;
 	}
 }

@@ -1244,6 +1244,11 @@ public:
 		//	pop ax
 		//	iret
 
+		/******************************************** #278 "FILES= adjustable by Kippesoep" patch*/		
+		Section_prop * section=static_cast<Section_prop *>(configuration);
+		DOS_FILES = section->Get_int("files");
+		/******************************************** #278 "FILES= adjustable by Kippesoep" patch*/
+		
 		DOS_SetupFiles();								/* Setup system File tables */
 		DOS_SetupDevices();							/* Setup dos devices */
 		DOS_SetupTables();
@@ -1260,6 +1265,9 @@ public:
 	}
 	~DOS(){
 		for (Bit16u i=0;i<DOS_DRIVES;i++) delete Drives[i];
+		/******************************************** #278 "FILES= adjustable by Kippesoep" patch*/	
+		delete [] Files;
+		/******************************************** #278 "FILES= adjustable by Kippesoep" patch*/	
 	}
 };
 

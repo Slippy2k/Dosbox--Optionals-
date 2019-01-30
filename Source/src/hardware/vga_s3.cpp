@@ -130,7 +130,7 @@ void SVGA_S3_WriteCRTC(Bitu reg,Bitu val,Bitu iolen) {
 		if ((((Bitu)vga.s3.hgc.startaddr)<<10)+((64*64*2)/8) > vga.vmemsize) {
 			vga.s3.hgc.startaddr &= 0xff;	// put it back to some sane area;
 											// if read back of this address is ever implemented this needs to change
-			LOG(LOG_VGAMISC,LOG_NORMAL)("VGA:S3:CRTC: HGC pattern address beyond video memory" );
+			LOG(LOG_VGAMISC,LOG_NORMAL)("VGA :S3:CRTC: HGC pattern address beyond video memory" );
 		}
 		break;
 	case 0x4d:  /* HGC start address low byte*/
@@ -155,6 +155,7 @@ void SVGA_S3_WriteCRTC(Bitu reg,Bitu val,Bitu iolen) {
 			case S3_XGA_1152: vga.s3.xga_screen_width = 1152; break;
 			case S3_XGA_640:  vga.s3.xga_screen_width = 640; break;
 			case S3_XGA_800:  vga.s3.xga_screen_width = 800; break;
+			case S3_XGA_1600: vga.s3.xga_screen_width = 1600; break;
 			case S3_XGA_1280: vga.s3.xga_screen_width = 1280; break;
 			default:  vga.s3.xga_screen_width = 1024; break;
 		}
@@ -346,7 +347,7 @@ void SVGA_S3_WriteCRTC(Bitu reg,Bitu val,Bitu iolen) {
 		vga.s3.reg_6b=(Bit8u)val;
 		break;
 	default:
-		LOG(LOG_VGAMISC,LOG_NORMAL)("VGA:S3:CRTC:Write to illegal index %2X", reg );
+		LOG(LOG_VGAMISC,LOG_NORMAL)("VGA :S3:CRTC:Write to illegal index %2X", reg );
 		break;
 	}
 }
@@ -465,7 +466,7 @@ void SVGA_S3_WriteSEQ(Bitu reg,Bitu val,Bitu iolen) {
 		VGA_StartResize();
 		break;
 	default:
-		LOG(LOG_VGAMISC,LOG_NORMAL)("VGA:S3:SEQ:Write to illegal index %2X", reg );
+		LOG(LOG_VGAMISC,LOG_NORMAL)("VGA :S3:SEQ:Write to illegal index %2X", reg );
 		break;
 	}
 }
@@ -490,7 +491,7 @@ Bitu SVGA_S3_ReadSEQ(Bitu reg,Bitu iolen) {
 	case 0x15:
 		return vga.s3.pll.cmd;
 	default:
-		LOG(LOG_VGAMISC,LOG_NORMAL)("VGA:S3:SEQ:Read from illegal index %2X", reg);
+		LOG(LOG_VGAMISC,LOG_NORMAL)("VGA :S3:SEQ:Read from illegal index %2X", reg);
 		return 0;
 	}
 }
@@ -531,55 +532,74 @@ void SVGA_Setup_S3Trio(void) {
 	svga.hardware_cursor_active = &SVGA_S3_HWCursorActive;
 	svga.accepts_mode = &SVGA_S3_AcceptsMode;
 
-	int S3MemSize = 0;
-	vga.vmemsize = S3MemSize;
+
+	vga.vmemsize = 0;
 	Section_prop *section = static_cast<Section_prop *>(control->GetSection("dosbox"));	
-	S3MemSize = section->Get_int("memsvga3");	
 
-	
-	if ( S3MemSize == 0){	
-		if (vga.vmemsize == 0)
-			LOG_MSG("S3 Trio Memory Size: Dosbox Default");				
-			//vga.vmemsize = 2*1024*1024; // the most common S3 configuration
-			vga.vmemsize = 2*1024*1024; // the most common S3 configuration
-
-		// Set CRTC 36 to specify amount of VRAM and PCI
-		if (vga.vmemsize < 1024*1024) {
-			vga.vmemsize = 512*1024;		
-			vga.s3.reg_36 = 0xfa;		// less than 1mb fast page mode
-	
-		
-		} else if (vga.vmemsize < 2048*1024)	{
-			vga.vmemsize = 1024*1024;
-			vga.s3.reg_36 = 0xda;		// 1mb fast page mode		
-		
-		} else if (vga.vmemsize < 3072*1024)	{
-			vga.vmemsize = 2048*1024;
-			vga.s3.reg_36 = 0x9a;		// 2mb fast page mode		
-		
-		} else if (vga.vmemsize < 4096*1024)	{
-			vga.vmemsize = 3072*1024;
-			vga.s3.reg_36 = 0x5a;		// 3mb fast page mode		
-		
-		} else {	// Trio64 supported only up to 4M	
-			vga.vmemsize = 4096*1024;
-			vga.s3.reg_36 = 0x1a;		// 4mb fast page mode	
+	switch(section->Get_int("memsvga3")){
+		case 0:
+		{
+			 vga.vmemsize = 512*1024;
+			 vga.s3.reg_36 = 0xfa;      				/* <-- less than 1mb fast page mode */
+			 
 		}
-	} else {
-		
-			for (int S3MemIndex = 1; S3MemIndex < 32; S3MemIndex++ ){   
-				if ( S3MemIndex == S3MemSize ){
-					 
-					 S3MemSize    = 1024*S3MemSize;	
-					 vga.vmemsize = S3MemSize;		 
-					 
-					 break;
-				}	
-			}			
-			vga.vmemsize = S3MemSize*1024;//4096*1024;
-			vga.s3.reg_36 = 0x1a;		// 4mb fast page mode
-			LOG_MSG("S3 Trio Memory Size: Manual Mode (%dkb)",S3MemSize );	
+		break;
+		case 1:
+		{
+			  vga.vmemsize = 1024*1024;
+			  vga.s3.reg_36 = 0xda;      				/* <-- 1mb fast page mode 			*/
+			  
+		}
+		break;
+		case 2:
+		{
+			  vga.vmemsize = 2048*1024;
+			  vga.s3.reg_36 = 0x9a;      				/* <-- 2mb fast page mode 			*/
+			  
+		}
+		break;
+		case 3:
+		{
+			  vga.vmemsize = 3072*1024;
+			  vga.s3.reg_36 = 0x5a;      				/* <-- 3mb fast page mode 			*/		
+			  			  
+		}
+		break;
+		case 4:
+		{
+			  vga.vmemsize = 4096*1024;
+			  vga.s3.reg_36 = 0x1a;      				/* <-- 4mb fast page mode 			*/		
+			  
+		}
+		break;
+		case 8:
+		{
+			  vga.vmemsize = 8192*1024;
+			  vga.s3.reg_36 = 0x7a;        				/* <-- 8mb fast page mode 			*/
+			  			  
+		}
+		break;
+		case 16:
+		{
+			  vga.vmemsize = (2*8192)*1024;
+			  vga.s3.reg_36 = 0xF4;         			/* <--16mb fast page mode, Test Only */
+			  			  
+		}
+		break;
+		case 32:
+		{
+			  vga.vmemsize = (4*8192)*1024;
+			  vga.s3.reg_36 = 0x1E8;         			/* <--32mb fast page mode, Test Only */
+			  			  
+		}		
+		break;
+		default:
+			LOG_MSG("VGA : Memory Size: Default\n");				
+			vga.vmemsize  = 2*1024*1024;		 			// the most common S3 configuration
+			vga.s3.reg_36 = 0x1a;      						/* <-- 2mb fast page mode 			*/			
 	}
+	LOG_MSG("VGA S3: Memory Size: (%dkb)\n",vga.vmemsize/1024 );	
+	
 	
 	// S3 ROM signature
 	PhysPt rom_base=PhysMake(0xc000,0);

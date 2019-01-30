@@ -364,14 +364,36 @@ void KEYBOARD_AddKey(KBD_KEYS keytype,bool pressed) {
 	case KBD_rwindows:extend=true;ret=0x5C;break;
 	case KBD_rwinmenu:extend=true;ret=0x5D;break;
 	
-	default:
-		E_Exit("Unsupported key press");
-		break;
-	}
+	case KBD_audiomute:
+		 KEYBOARD_AddBuffer(0xe0);
+		 KEYBOARD_AddBuffer(32|(pressed?0:0x80));
+		 break;
+	case KBD_volumedown:
+		 KEYBOARD_AddBuffer(0xe0);
+		 KEYBOARD_AddBuffer(46|(pressed?0:0x80));
+		 break;	
+	case KBD_volumeup:
+		 KEYBOARD_AddBuffer(0xe0);
+		 KEYBOARD_AddBuffer(48|(pressed?0:0x80));
+		 break;		 
+	// case KBD_audiomute :extend=true;ret=32;break;//0x20
+	// case KBD_volumedown:extend=true;ret=46;break;//0x2e
+	// case KBD_volumeup  :extend=true;ret=48;break;//0x30
+	
+    default:
+        LOG_MSG("Unsupported key press %lu", (unsigned long)keytype);
+        return;
+    }
+
 	/* Add the actual key in the keyboard queue */
 	if (pressed) {
-		if (keyb.repeat.key == keytype) keyb.repeat.wait = keyb.repeat.rate;		
-		else keyb.repeat.wait = keyb.repeat.pause;
+		if (keyb.repeat.key == keytype){
+			keyb.repeat.wait = keyb.repeat.rate;		
+		}
+		else 
+		{
+			keyb.repeat.wait = keyb.repeat.pause;
+		}
 		keyb.repeat.key = keytype;
 	} else {
 		if (keyb.repeat.key == keytype) {
